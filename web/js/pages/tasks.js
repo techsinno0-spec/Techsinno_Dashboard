@@ -1,0 +1,380 @@
+let tasksFilter = 'all';
+let tasksDetailId = null;
+let _completionTask = null;
+let _allTasks = [];
+
+async function render_tasks() {
+  const el = document.getElementById('page-tasks');
+  const role = getUser().role;
+
+  el.innerHTML = '<div class="spin"></div> Loading tasks...';
+
+  try {
+    const data = await apiGet('/tasks');
+    const tasks = (data && data.tasks) || [];
+    _allTasks = tasks;
+
+    let html = '';
+
+    // Filter tabs
+    html += `<div class="wtabs">
+      <div class="wtab ${tasksFilter === 'all' ? 'active' : ''}" onclick="setTasksFilter('all')">All</div>
+      <div class="wtab ${tasksFilter === 'pending' ? 'active' : ''}" onclick="setTasksFilter('pending')">Pending</div>
+      <div class="wtab ${tasksFilter === 'in_progress' ? 'active' : ''}" onclick="setTasksFilter('in_progress')">In Progress</div>
+      <div class="wtab ${tasksFilter === 'done' ? 'active' : ''}" onclick="setTasksFilter('done')">Done</div>
+      <div class="wtab ${tasksFilter === 'blocked' ? 'active' : ''}" onclick="setTasksFilter('blocked')">Blocked</div>
+    </div>`;
+
+    // Create task button (manager only)
+    if (role === 'manager') {
+      html += `<div style="margin-bottom:14px">
+        <button class="btn" onclick="showCreateTask()"><i class="ti ti-plus" style="font-size:13px"></i> Assign New Task</button>
+      </div>`;
+      html += `<div id="createTaskForm" style="display:none"></div>`;
+    }
+
+    // Task list
+    const filtered = tasksFilter === 'all' ? tasks : tasks.filter(t => t.status === tasksFilter);
+
+    if (filtered.length === 0) {
+      html += '<div class="empty-state"><i class="ti ti-checklist"></i>No tasks found</div>';
+    } else {
+      html += '<div id="tasksList">';
+      filtered.forEach(t => {
+        const isOverdue = t.deadline && t.status !== 'done' && new Date(t.deadline) < new Date();
+        html += `<div class="card" style="margin-bottom:8px;cursor:pointer;${isOverdue ? 'border-color:rgba(248,81,73,.3)' : ''}" onclick="toggleTaskDetail('${t.id}')">
+          <div style="display:flex;align-items:flex-start;gap:10px">
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:500;color:var(--text);${t.status === 'done' ? 'text-decoration:line-through;color:var(--text3)' : ''}">${escHtml(t.title)}</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:3px">
+                ${role === 'manager' ? '<i class="ti ti-user" style="font-size:11px"></i> ' + escHtml(getUserName(t.assignedTo)) + ' · ' : ''}${t.deadline ? (isOverdue ? '<span style="color:#f85149">Overdue</span> · ' : '') + 'Due ' + formatDate(t.deadline) : 'No deadline'}
+                ${t.notes && t.notes.length > 0 ? ' · <i class="ti ti-message" style="font-size:10px"></i> ' + t.notes.length : ''}
+              </div>
+            </div>
+            <div style="display:flex;gap:5px;align-items:center">
+              ${priorityBadge(t.priority)} ${statusBadge(t.status)} ${categoryTag(t.category)}
+            </div>
+          </div>
+          <div id="detail-${t.id}" style="display:${tasksDetailId === t.id ? 'block' : 'none'}"></div>
+        </div>`;
+      });
+      html += '</div>';
+    }
+
+    el.innerHTML = html;
+
+    if (tasksDetailId) renderTaskDetail(tasksDetailId, tasks.find(t => t.id === tasksDetailId));
+  } catch (err) {
+    el.innerHTML = '<div class="empty-state"><i class="ti ti-alert-circle"></i>Failed to load tasks</div>';
+  }
+}
+
+function setTasksFilter(f) {
+  tasksFilter = f;
+  tasksDetailId = null;
+  render_tasks();
+}
+
+async function toggleTaskDetail(id) {
+  tasksDetailId = tasksDetailId === id ? null : id;
+  render_tasks();
+}
+
+function renderTaskDetail(id, task) {
+  if (!task) return;
+  const el = document.getElementById('detail-' + id);
+  if (!el) return;
+
+  const role = getUser().role;
+  let html = '<div class="task-detail" onclick="event.stopPropagation()">';
+
+  if (task.description) {
+    html += `<div style="font-size:12px;color:var(--text2);margin-bottom:10px">${escHtml(task.description)}</div>`;
+  }
+
+  html += `<div style="font-size:11px;color:var(--text3);margin-bottom:10px">
+    Created ${formatDateTime(task.createdAt)}${task.completedAt ? ' · Completed ' + formatDateTime(task.completedAt) : ''}
+  </div>`;
+
+  // Status change
+  html += `<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+    <span class="flbl" style="margin:0;padding-top:4px">Status:</span>
+    ${['pending', 'in_progress', 'done', 'blocked'].map(s =>
+      `<button class="btn bsm ${task.status === s ? '' : 'bo'}" onclick="event.stopPropagation();updateTaskStatus('${id}','${s}')">${s.replace('_', ' ')}</button>`
+    ).join('')}
+  </div>`;
+
+  // Notes
+  html += '<div class="fl">Notes</div>';
+  if (task.notes && task.notes.length > 0) {
+    task.notes.forEach(n => {
+      html += `<div class="note-item">
+        <div class="note-meta">${escHtml(n.authorName || getUserName(n.author))} · ${timeAgo(n.timestamp)}</div>
+        <div class="note-text">${escHtml(n.text)}</div>
+      </div>`;
+    });
+  } else {
+    html += '<div style="font-size:11px;color:var(--text3);margin-bottom:6px">No notes yet</div>';
+  }
+
+  html += `<div class="note-form">
+    <textarea id="noteText-${id}" placeholder="Add a note..." style="flex:1"></textarea>
+    <button class="btn bsm" onclick="event.stopPropagation();addNote('${id}')">Add</button>
+  </div>`;
+
+  // Manager: reassign / delete
+  if (role === 'manager') {
+    html += `<div style="display:flex;gap:6px;margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
+      <select id="reassign-${id}" style="flex:1">
+        <option value="">Reassign to...</option>
+        ${appUsers.filter(u => u.active).map(u => `<option value="${u.id}" ${u.id === task.assignedTo ? 'selected' : ''}>${escHtml(u.displayName)}</option>`).join('')}
+      </select>
+      <button class="btn bsm" onclick="event.stopPropagation();reassignTask('${id}')">Reassign</button>
+      <button class="btn bsm bdng" onclick="event.stopPropagation();deleteTask('${id}')">Delete</button>
+    </div>`;
+  }
+
+  html += '</div>';
+  el.innerHTML = html;
+  el.style.display = 'block';
+}
+
+async function updateTaskStatus(taskId, status) {
+  if (status === 'done') {
+    showCompletionModal(taskId);
+    return;
+  }
+  const data = await apiPut('/tasks/' + taskId, { status });
+  if (data && data.error) { ntf(data.error); return; }
+  ntf('Task status updated');
+  render_tasks();
+}
+
+function showCompletionModal(taskId) {
+  _completionTask = _allTasks.find(t => t.id === taskId);
+  if (!_completionTask) return;
+  const el = document.getElementById('completionModalContent');
+  el.innerHTML = `
+    <h3 style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;margin-bottom:4px">Complete Task</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:16px">${escHtml(_completionTask.title)}</p>
+    <div class="completion-opt" onclick="showRepeatForm()">
+      <i class="ti ti-repeat"></i>
+      <div><div class="opt-title">Complete & Repeat</div><div class="opt-desc">Mark done and create an identical task with a new deadline</div></div>
+    </div>
+    <div class="completion-opt" onclick="showCreateNewForm()">
+      <i class="ti ti-copy"></i>
+      <div><div class="opt-title">Complete & Create New</div><div class="opt-desc">Mark done and create an editable follow-up task</div></div>
+    </div>
+    <div class="completion-opt" onclick="completeOnly()">
+      <i class="ti ti-circle-check"></i>
+      <div><div class="opt-title">Complete (Done)</div><div class="opt-desc">Simply mark as done, no follow-up</div></div>
+    </div>
+    <button class="btn bsm bo" style="margin-top:8px;width:100%" onclick="closeCompletionModal()">Cancel</button>`;
+  document.getElementById('completionModal').classList.add('show');
+}
+
+function showRepeatForm() {
+  const el = document.getElementById('completionModalContent');
+  const now = new Date(); now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  const minDate = now.toISOString().slice(0, 16);
+  el.innerHTML = `
+    <h3 style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;margin-bottom:4px">Complete & Repeat</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:16px">Set the deadline for the repeated task:</p>
+    <div class="flbl">New Deadline</div>
+    <input type="datetime-local" id="repeatDeadline" style="width:100%" min="${minDate}">
+    <div style="display:flex;gap:6px;margin-top:16px">
+      <button class="btn" onclick="completeAndRepeat()">Confirm</button>
+      <button class="btn bo" onclick="showCompletionModal('${_completionTask.id}')">Back</button>
+    </div>`;
+}
+
+function showCreateNewForm() {
+  const t = _completionTask;
+  const now = new Date(); now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  const minDate = now.toISOString().slice(0, 16);
+  let assignOpts = '';
+  if (isManager()) {
+    assignOpts = appUsers.filter(u => u.active).map(u =>
+      `<option value="${u.id}" ${u.id === t.assignedTo ? 'selected' : ''}>${u.displayName}</option>`
+    ).join('');
+  }
+  const el = document.getElementById('completionModalContent');
+  el.innerHTML = `
+    <h3 style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;margin-bottom:4px">Complete & Create New</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Edit the follow-up task details:</p>
+    <div class="flbl">Title</div>
+    <input type="text" id="cnTitle" style="width:100%" value="${t.title}">
+    <div class="flbl">Description</div>
+    <textarea id="cnDesc" style="width:100%">${t.description || ''}</textarea>
+    <div style="display:flex;gap:8px">
+      ${isManager() ? `<div style="flex:1"><div class="flbl">Assign To</div><select id="cnAssign" style="width:100%">${assignOpts}</select></div>` : ''}
+      <div style="flex:1"><div class="flbl">Category</div>
+        <select id="cnCat" style="width:100%">
+          ${['general','repair','auto','iot','admin'].map(c => `<option value="${c}" ${c===t.category?'selected':''}>${c}</option>`).join('')}
+        </select>
+      </div>
+      <div style="flex:1"><div class="flbl">Priority</div>
+        <select id="cnPri" style="width:100%">
+          ${['medium','high','low'].map(p => `<option value="${p}" ${p===t.priority?'selected':''}>${p}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="flbl">Deadline</div>
+    <input type="datetime-local" id="cnDeadline" style="width:100%" min="${minDate}">
+    <div style="display:flex;gap:6px;margin-top:16px">
+      <button class="btn" onclick="completeAndCreateNew()">Confirm</button>
+      <button class="btn bo" onclick="showCompletionModal('${t.id}')">Back</button>
+    </div>`;
+}
+
+async function completeAndRepeat() {
+  const deadline = document.getElementById('repeatDeadline').value;
+  if (!deadline) { ntf('Please select a date and time'); return; }
+  const t = _completionTask;
+  await apiPut('/tasks/' + t.id, { status: 'done' });
+  await apiPost('/tasks', {
+    title: t.title, description: t.description || '', assignedTo: t.assignedTo,
+    category: t.category, priority: t.priority, deadline: new Date(deadline).toISOString()
+  });
+  closeCompletionModal();
+  ntf('Task completed, repeat created');
+  render_tasks();
+}
+
+async function completeAndCreateNew() {
+  const title = document.getElementById('cnTitle').value.trim();
+  if (!title) { ntf('Title is required'); return; }
+  const deadline = document.getElementById('cnDeadline').value;
+  if (!deadline) { ntf('Please select a date and time'); return; }
+  const t = _completionTask;
+  await apiPut('/tasks/' + t.id, { status: 'done' });
+  const newTask = {
+    title,
+    description: document.getElementById('cnDesc').value.trim(),
+    assignedTo: isManager() ? document.getElementById('cnAssign').value : t.assignedTo,
+    category: document.getElementById('cnCat').value,
+    priority: document.getElementById('cnPri').value,
+    deadline: new Date(deadline).toISOString()
+  };
+  await apiPost('/tasks', newTask);
+  closeCompletionModal();
+  ntf('Task completed, new task created');
+  render_tasks();
+}
+
+async function completeOnly() {
+  await apiPut('/tasks/' + _completionTask.id, { status: 'done' });
+  closeCompletionModal();
+  ntf('Task completed');
+  render_tasks();
+}
+
+function closeCompletionModal() {
+  document.getElementById('completionModal').classList.remove('show');
+  _completionTask = null;
+}
+
+async function addNote(taskId) {
+  const textarea = document.getElementById('noteText-' + taskId);
+  const text = textarea.value.trim();
+  if (!text) return;
+  const data = await apiPost('/tasks/' + taskId + '/notes', { text });
+  if (data && data.error) { ntf(data.error); return; }
+  ntf('Note added');
+  render_tasks();
+}
+
+async function reassignTask(taskId) {
+  const sel = document.getElementById('reassign-' + taskId);
+  if (!sel.value) return;
+  const data = await apiPut('/tasks/' + taskId, { assignedTo: sel.value });
+  if (data && data.error) { ntf(data.error); return; }
+  ntf('Task reassigned');
+  render_tasks();
+}
+
+async function deleteTask(taskId) {
+  const task = _allTasks.find(t => t.id === taskId);
+  if (!confirm('Delete task "' + (task ? task.title : taskId) + '"? This cannot be undone.')) return;
+  const data = await apiDelete('/tasks/' + taskId);
+  if (data && data.error) { ntf(data.error); return; }
+  tasksDetailId = null;
+  ntf('Task deleted');
+  render_tasks();
+}
+
+function showCreateTask() {
+  const el = document.getElementById('createTaskForm');
+  if (el.style.display === 'block') { el.style.display = 'none'; return; }
+
+  el.style.display = 'block';
+  el.innerHTML = `<div class="card" style="margin-bottom:14px">
+    <div class="ctitle">Assign New Task</div>
+    <div class="flbl">Title *</div>
+    <input type="text" id="newTaskTitle" placeholder="Task title" style="width:100%">
+    <div class="flbl">Description</div>
+    <textarea id="newTaskDesc" placeholder="Optional description" style="width:100%"></textarea>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <div style="flex:1">
+        <div class="flbl">Assign To *</div>
+        <select id="newTaskAssign" style="width:100%">
+          <option value="">Select staff member</option>
+          ${appUsers.filter(u => u.active).map(u => `<option value="${u.id}">${u.displayName} (${u.role})</option>`).join('')}
+        </select>
+      </div>
+      <div style="flex:1">
+        <div class="flbl">Category</div>
+        <select id="newTaskCat" style="width:100%">
+          <option value="general">General</option>
+          <option value="repair">Repair</option>
+          <option value="auto">Automation</option>
+          <option value="iot">IoT</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <div style="flex:1">
+        <div class="flbl">Priority</div>
+        <select id="newTaskPri" style="width:100%">
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+          <option value="low">Low</option>
+        </select>
+      </div>
+      <div style="flex:1">
+        <div class="flbl">Deadline</div>
+        <input type="date" id="newTaskDeadline" style="width:100%">
+      </div>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:14px">
+      <button class="btn" onclick="submitCreateTask()">Create & Assign</button>
+      <button class="btn bo" onclick="document.getElementById('createTaskForm').style.display='none'">Cancel</button>
+    </div>
+  </div>`;
+}
+
+async function submitCreateTask() {
+  const title = document.getElementById('newTaskTitle').value.trim();
+  const assignedTo = document.getElementById('newTaskAssign').value;
+  if (!title) { ntf('Title is required'); return; }
+  if (!assignedTo) { ntf('Please select a staff member'); return; }
+
+  const task = {
+    title,
+    description: document.getElementById('newTaskDesc').value.trim(),
+    assignedTo,
+    category: document.getElementById('newTaskCat').value,
+    priority: document.getElementById('newTaskPri').value,
+    deadline: document.getElementById('newTaskDeadline').value || null
+  };
+
+  const data = await apiPost('/tasks', task);
+  if (data && data.task) {
+    ntf('Task created and assigned');
+    document.getElementById('createTaskForm').style.display = 'none';
+    render_tasks();
+  } else {
+    ntf((data && data.error) || 'Failed to create task');
+  }
+}

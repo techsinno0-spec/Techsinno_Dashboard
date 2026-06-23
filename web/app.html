@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TECHSINNO Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/tabler-icons.min.css">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="app">
+
+  <!-- MOBILE NAV -->
+  <button class="menu-toggle" onclick="toggleMobileMenu()" aria-label="Menu"><i class="ti ti-menu-2"></i></button>
+  <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleMobileMenu()"></div>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebarEl">
+    <div class="logo-area">
+      <div style="width:36px;height:36px;border-radius:7px;background:var(--brand);display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;font-size:16px;color:#fff;flex-shrink:0;">T</div>
+      <div>
+        <div class="logo-text">TECHSINNO</div>
+        <div class="logo-sub">Team Dashboard</div>
+      </div>
+    </div>
+    <div id="sidebarNav"></div>
+    <div class="sb-bottom">
+      <div class="sb-user"><strong id="sbUserName">—</strong></div>
+      <div class="sb-role" id="sbUserRole">—</div>
+      <div class="sb-logout" onclick="logout()"><i class="ti ti-logout" style="font-size:13px"></i> Sign out</div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main-wrap">
+    <div class="topbar">
+      <div>
+        <div class="page-title" id="pageTitle">Dashboard</div>
+        <div class="page-sub" id="pageSub">Overview</div>
+      </div>
+      <div class="tb-right">
+        <span class="date-pill" id="datePill"></span>
+      </div>
+    </div>
+    <div class="content">
+
+      <!-- DASHBOARD -->
+      <div class="page active" id="page-dashboard"></div>
+
+      <!-- TASKS -->
+      <div class="page" id="page-tasks"></div>
+
+      <!-- CRM (manager) -->
+      <div class="page" id="page-crm"></div>
+
+      <!-- QUOTES (manager) -->
+      <div class="page" id="page-quotes"></div>
+
+      <!-- 90-DAY GOALS (manager) -->
+      <div class="page" id="page-goals"></div>
+
+      <!-- ZOHO BOOKS (manager) -->
+      <div class="page" id="page-zoho"></div>
+
+      <!-- SOCIAL MEDIA (manager) -->
+      <div class="page" id="page-social"></div>
+
+      <!-- MARKETING (manager) -->
+      <div class="page" id="page-marketing"></div>
+
+      <!-- ALL INBOXES (manager) -->
+      <div class="page" id="page-inboxes"></div>
+
+      <!-- REMINDERS -->
+      <div class="page" id="page-reminders"></div>
+
+      <!-- TEMPLATES (manager) -->
+      <div class="page" id="page-templates"></div>
+
+      <!-- SETTINGS (manager) -->
+      <div class="page" id="page-settings"></div>
+
+      <!-- COMMUNICATIONS (manager) -->
+      <div class="page" id="page-communications"></div>
+
+      <!-- AI AGENT -->
+      <div class="page" id="page-agent"></div>
+
+      <!-- TEAM MANAGEMENT (manager) -->
+      <div class="page" id="page-team"></div>
+
+      <!-- STAFF ACTIVITY (manager) -->
+      <div class="page" id="page-staff-activity"></div>
+
+      <!-- TASK REPORTS (manager) -->
+      <div class="page" id="page-task-reports"></div>
+
+    </div>
+  </div>
+</div>
+
+<!-- CHANGE PASSWORD MODAL -->
+<div class="modal-overlay" id="changePwModal">
+  <div class="modal-box">
+    <h3>Change Your Password</h3>
+    <p>Your account requires a password change before continuing.</p>
+    <div class="flbl">Current Password</div>
+    <input type="password" id="cpCurrent" style="width:100%;margin-bottom:6px" placeholder="Enter current password">
+    <div class="flbl">New Password</div>
+    <input type="password" id="cpNew" style="width:100%;margin-bottom:6px" placeholder="Min 8 characters">
+    <div class="flbl">Confirm New Password</div>
+    <input type="password" id="cpConfirm" style="width:100%;margin-bottom:6px" placeholder="Repeat new password">
+    <button class="btn" style="width:100%;margin-top:12px" onclick="submitChangePassword()">Change Password</button>
+    <div class="login-err" id="cpErr"></div>
+  </div>
+</div>
+
+<!-- COMPLETION MODAL -->
+<div class="modal-overlay" id="completionModal">
+  <div class="modal-box" style="width:460px">
+    <div id="completionModalContent"></div>
+  </div>
+</div>
+
+<!-- SOCIAL POST MODAL -->
+<div class="modal-overlay" id="socialPostModal">
+  <div class="modal-box" style="width:500px">
+    <div id="socialPostContent"></div>
+  </div>
+</div>
+
+<!-- NOTIFICATION TOAST -->
+<div class="ntf" id="ntf"></div>
+
+<!-- JS MODULES -->
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/router.js"></script>
+<script src="js/pages/dashboard.js"></script>
+<script src="js/pages/tasks.js"></script>
+<script src="js/pages/reminders.js"></script>
+<script src="js/pages/team.js"></script>
+<script src="js/pages/staff-activity.js"></script>
+<script src="js/pages/settings.js"></script>
+<script src="js/pages/goals.js"></script>
+<script src="js/pages/zoho.js"></script>
+<script src="js/pages/ai-agent.js"></script>
+<script src="js/pages/social.js"></script>
+<script src="js/pages/inboxes.js"></script>
+<script src="js/pages/communications.js"></script>
+<script src="js/pages/task-reports.js"></script>
+<script src="js/pages/crm.js"></script>
+<script src="js/pages/quotes.js"></script>
+<script src="js/pages/templates.js"></script>
+<script src="js/pages/marketing.js"></script>
+<script src="js/app.js"></script>
+<script>
+document.getElementById('datePill').textContent = new Date().toLocaleDateString('en-ZA', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+
+async function submitChangePassword() {
+  const curr = document.getElementById('cpCurrent').value;
+  const newP = document.getElementById('cpNew').value;
+  const conf = document.getElementById('cpConfirm').value;
+  const err = document.getElementById('cpErr');
+  if (!curr || !newP) { err.textContent = 'All fields required'; return; }
+  if (newP !== conf) { err.textContent = 'Passwords do not match'; return; }
+  if (newP.length < 8) { err.textContent = 'Password must be at least 8 characters'; return; }
+  err.textContent = '';
+  const data = await changePassword(curr, newP);
+  if (data && data.success) {
+    const user = getUser();
+    user.mustChangePassword = false;
+    sessionStorage.setItem('ts_user', JSON.stringify(user));
+    document.getElementById('changePwModal').classList.remove('show');
+    ntf('Password changed successfully');
+  } else {
+    err.textContent = (data && data.error) || 'Failed to change password';
+  }
+}
+</script>
+</body>
+</html>

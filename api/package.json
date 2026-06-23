@@ -1,0 +1,20 @@
+{
+  "name": "techsinno-api",
+  "version": "1.0.0",
+  "description": "TECHSINNO Dashboard API — Azure Functions",
+  "main": "src/functions/*.js",
+  "scripts": {
+    "start": "func start",
+    "seed": "node scripts/seed-manager.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.100.1",
+    "@azure/cosmos": "^4.2.0",
+    "@azure/functions": "^4.6.0",
+    "axios": "^1.6.0",
+    "bcryptjs": "^2.4.3",
+    "form-data": "^4.0.6",
+    "jsonwebtoken": "^9.0.2",
+    "uuid": "^11.1.0"
+  }
+}
