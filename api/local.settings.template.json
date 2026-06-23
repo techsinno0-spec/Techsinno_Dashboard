@@ -1,0 +1,13 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "COSMOS_CONNECTION_STRING": "AccountEndpoint=https://<YOUR-COSMOS-ACCOUNT>.documents.azure.com:443/;AccountKey=<YOUR-KEY>;",
+    "COSMOS_DB_NAME": "techsinno-db",
+    "JWT_SECRET": "<GENERATE-A-STRONG-RANDOM-SECRET-MIN-32-CHARS>"
+  },
+  "Host": {
+    "CORS": "*",
+    "CORSCredentials": false
+  }
+}

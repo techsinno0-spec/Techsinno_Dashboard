@@ -1,15 +1,27 @@
 {
   "name": "techsinno-dashboard",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "TECHSINNO Business Dashboard — Frank Muland",
   "main": "Techsinno_DashBoard.js",
   "scripts": {
-    "start": "node -e \"delete process.env.ELECTRON_RUN_AS_NODE;require('child_process').spawnSync(require('electron'),['.'],{stdio:'inherit',env:process.env})\"",
-    "build": "electron-builder --win --x64"
+    "start": "electron Techsinno_DashBoard.js",
+    "start:web": "node web-server.js",
+    "build": "electron-builder --win --x64",
+    "api": "cd api && func start",
+    "dev": "concurrently \"npm run api\" \"npm run start:web\""
   },
   "build": {
     "appId": "co.za.techsinno.dashboard",
     "productName": "TECHSINNO Dashboard",
+    "files": [
+      "Techsinno_DashBoard.js",
+      "preload.js",
+      "web-server.js",
+      "src/**",
+      "web/**",
+      "assets/**",
+      "node_modules/**"
+    ],
     "win": {
       "target": "nsis",
       "icon": "assets/icon.ico"
@@ -20,6 +32,7 @@
     }
   },
   "devDependencies": {
+    "concurrently": "^8.0.0",
     "electron": "^28.3.3",
     "electron-builder": "^24.0.0"
   },
