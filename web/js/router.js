@@ -2,6 +2,9 @@ const NAV_CONFIG = [
   { section: 'Overview' },
   { id: 'dashboard', icon: 'ti-layout-dashboard', label: 'Dashboard', roles: ['manager', 'staff'] },
   { id: 'tasks', icon: 'ti-checklist', label: 'My Tasks', roles: ['manager', 'staff'] },
+  { section: 'Operations' },
+  { id: 'job-cards', icon: 'ti-clipboard-list', label: 'Job Cards', roles: ['manager', 'staff'] },
+  { id: 'projects', icon: 'ti-layout-kanban', label: 'Projects', roles: ['manager', 'staff'] },
   { section: 'Business', roles: ['manager'] },
   { id: 'crm', icon: 'ti-address-book', label: 'CRM', roles: ['manager'] },
   { id: 'quotes', icon: 'ti-file-invoice', label: 'Quotes', roles: ['manager'] },
@@ -72,6 +75,8 @@ function navigateTo(pageId) {
   const titles = {
     'dashboard': ['Dashboard', 'Overview'],
     'tasks': ['Tasks', isManager() ? 'Manage & assign tasks' : 'Your assigned tasks'],
+    'job-cards': ['Job Cards', isManager() ? 'Manage all job cards' : 'Your assigned job cards'],
+    'projects': ['Projects', isManager() ? 'All projects & phases' : 'Your assigned projects'],
     'goals': ['90-Day Goals', 'Foundation → Traction → Scale'],
     'zoho': ['Zoho Books', 'Financial dashboard'],
     'crm': ['CRM', 'Client pipeline & lead tracking'],
