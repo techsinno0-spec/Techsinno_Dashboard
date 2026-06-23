@@ -23,7 +23,10 @@ async function createContainers() {
     { id: 'templates', partitionKey: '/id' },
     { id: 'campaigns', partitionKey: '/id' },
     { id: 'scheduled_posts', partitionKey: '/id' },
-    { id: 'recurring_tasks', partitionKey: '/id' }
+    { id: 'recurring_tasks', partitionKey: '/id' },
+    // ── New: Operations modules ──────────────────────────────────────────────
+    { id: 'job-cards', partitionKey: '/id' },
+    { id: 'projects', partitionKey: '/id' },
   ];
 
   for (const def of containers) {
