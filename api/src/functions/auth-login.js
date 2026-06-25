@@ -68,7 +68,7 @@ app.http('auth-login', {
         expiresIn: 86400
       });
     } catch (err) {
-      return jsonResponse({ error: 'Login failed', detail: String((err && err.message) || err) }, 500);
+      return jsonResponse({ error: 'Login failed' }, 500);
     }
   }
 });
