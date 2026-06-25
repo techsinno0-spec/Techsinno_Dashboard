@@ -37,6 +37,8 @@ input:focus{border-color:var(--brand-mid);}
     <input type="text" id="loginUser" placeholder="Enter your username" autofocus>
     <div class="flbl">Password</div>
     <input type="password" id="loginPass" placeholder="Enter your password">
+    <div class="flbl">Cloud dashboard URL</div>
+    <input type="url" id="apiBaseUrl" placeholder="https://your-app.azurestaticapps.net">
     <button class="btn" id="loginBtn" onclick="doLogin()">Sign In</button>
     <div class="login-err" id="loginErr"></div>
   </div>
@@ -45,6 +47,11 @@ input:focus{border-color:var(--brand-mid);}
 
 <script>
 const isElectron = !!(window.techsinno);
+
+window.addEventListener('DOMContentLoaded', async () => {
+  const apiBase = await window.techsinno.authGetApiBase();
+  document.getElementById('apiBaseUrl').value = apiBase || '';
+});
 
 document.getElementById('loginPass').addEventListener('keydown', e => {
   if (e.key === 'Enter') doLogin();
@@ -56,16 +63,22 @@ document.getElementById('loginUser').addEventListener('keydown', e => {
 async function doLogin() {
   const username = document.getElementById('loginUser').value.trim();
   const password = document.getElementById('loginPass').value;
+  const apiBase = document.getElementById('apiBaseUrl').value.trim();
   const err = document.getElementById('loginErr');
   const btn = document.getElementById('loginBtn');
 
   if (!username || !password) { err.textContent = 'Enter username and password'; return; }
+  if (!apiBase) { err.textContent = 'Enter the cloud dashboard URL'; return; }
 
   err.textContent = '';
   btn.disabled = true;
   btn.textContent = 'Signing in...';
 
   try {
+    const configured = await window.techsinno.authSetApiBase(apiBase);
+    if (!configured || configured.error) {
+      throw new Error(configured?.error || 'Invalid cloud dashboard URL');
+    }
     const result = await window.techsinno.authLogin(username, password);
     if (result && result.success) {
       window.location.href = 'index.html';

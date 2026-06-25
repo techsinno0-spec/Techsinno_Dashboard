@@ -22,6 +22,11 @@ function verifyToken(token) {
 }
 
 function extractToken(request) {
+  const appToken = request.headers.get('x-techsinno-token') || '';
+  if (appToken) {
+    return appToken.startsWith('Bearer ') ? appToken.slice(7) : appToken;
+  }
+
   const authHeader = request.headers.get('authorization') || '';
   if (authHeader.startsWith('Bearer ')) {
     return authHeader.slice(7);

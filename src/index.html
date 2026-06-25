@@ -2940,10 +2940,12 @@ async function rSettings(){
 async function saveApiUrl() {
   const v = document.getElementById('apiBaseUrl').value.trim().replace(/\/$/, '');
   if (!v) { ntf('Enter a URL'); return; }
-  await window.techsinno.storeSet('api_base_url', v);
+  const result = await window.techsinno.authSetApiBase(v);
+  if (!result || result.error) { ntf((result && result.error) || 'Invalid API URL'); return; }
   const st = document.getElementById('apiUrlStatus');
-  if (st) st.textContent = '✓ Saved — restart app to apply';
-  ntf('API URL saved — restart required');
+  if (st) st.textContent = '✓ Saved';
+  ntf('API URL saved. Please sign in again.');
+  window.location.href = 'login.html';
 }
 
 async function rZohomailSetup(){

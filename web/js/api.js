@@ -23,7 +23,10 @@ async function apiCall(method, path, body = null) {
   await ensureToken();
   const token = localStorage.getItem('ts_token');
   const headers = { 'Content-Type': 'application/json' };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+    headers['X-Techsinno-Token'] = token;
+  }
   const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(`${API_BASE}/api${path}`, opts);

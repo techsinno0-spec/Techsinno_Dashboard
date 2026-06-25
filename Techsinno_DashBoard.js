@@ -14,7 +14,19 @@ let mainWindow;
 let authServer;
 
 // ─── API BASE URL ─────────────────────────────────────────────────────────────
-const API_BASE = 'http://127.0.0.1:7071';
+function normalizeApiBase(value) {
+  return String(value || '').trim().replace(/\/+$/, '');
+}
+
+function getApiBase() {
+  const configured = normalizeApiBase(store.get('api_base_url'));
+  if (configured) return configured;
+
+  const environmentUrl = normalizeApiBase(process.env.TECHSINNO_API_BASE_URL);
+  if (environmentUrl) return environmentUrl;
+
+  return app.isPackaged ? '' : 'http://127.0.0.1:7071';
+}
 
 // ─── WINDOW ───────────────────────────────────────────────────────────────────
 
@@ -35,7 +47,8 @@ function createWindow() {
     backgroundColor: '#0d1117'
   });
 
-  const hasSession = store.get('auth_token') && store.get('auth_user');
+  const sessionUser = store.get('auth_user');
+  const hasSession = store.get('auth_token') && sessionUser?.role === 'manager';
   if (hasSession) {
     mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
   } else {
@@ -63,9 +76,13 @@ app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) creat
 
 ipcMain.handle('auth-login', async (_, username, password) => {
   try {
-    if (!API_BASE) return { error: 'API URL not configured. Set it in Settings.' };
-    const res = await axios.post(`${API_BASE}/api/auth/login`, { username, password });
+    const apiBase = getApiBase();
+    if (!apiBase) return { error: 'Cloud API URL is not configured. Add it below and try again.' };
+    const res = await axios.post(`${apiBase}/api/auth/login`, { username, password }, { timeout: 15000 });
     if (res.data && res.data.token) {
+      if (res.data.user?.role !== 'manager') {
+        return { error: 'The desktop dashboard is restricted to manager accounts.' };
+      }
       store.set('auth_token', res.data.token);
       store.set('auth_user', res.data.user);
       return { success: true, user: res.data.user };
@@ -88,14 +105,31 @@ ipcMain.handle('auth-get-user', () => {
   return store.get('auth_user', null);
 });
 
+ipcMain.handle('auth-get-api-base', () => getApiBase());
+
+ipcMain.handle('auth-set-api-base', (_, value) => {
+  const apiBase = normalizeApiBase(value);
+  if (!/^https?:\/\/[^/]+/i.test(apiBase)) {
+    return { error: 'Enter a valid URL beginning with http:// or https://' };
+  }
+  store.set('api_base_url', apiBase);
+  store.delete('auth_token');
+  store.delete('auth_user');
+  return { success: true, apiBase };
+});
+
 ipcMain.handle('auth-change-password', async (_, currentPassword, newPassword) => {
   try {
-    if (!API_BASE) return { error: 'API URL not configured' };
+    const apiBase = getApiBase();
+    if (!apiBase) return { error: 'API URL not configured' };
     const token = store.get('auth_token');
     if (!token) return { error: 'Not logged in' };
-    const res = await axios.post(`${API_BASE}/api/auth/change-password`,
+    const res = await axios.post(`${apiBase}/api/auth/change-password`,
       { currentPassword, newPassword },
-      { headers: { Authorization: `Bearer ${token}` } }
+      { headers: {
+        Authorization: `Bearer ${token}`,
+        'X-Techsinno-Token': token
+      } }
     );
     if (res.data.success) {
       const user = store.get('auth_user');
@@ -109,15 +143,19 @@ ipcMain.handle('auth-change-password', async (_, currentPassword, newPassword) =
 
 async function ensureElectronToken() {
   const token = store.get('auth_token');
-  if (!token || !API_BASE) return;
+  const apiBase = getApiBase();
+  if (!token || !apiBase) return;
   try {
     const parts = token.split('.');
     const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
     const remaining = (payload.exp * 1000) - Date.now();
     if (remaining > 3600000) return;
     if (remaining <= 0) { store.delete('auth_token'); store.delete('auth_user'); return; }
-    const res = await axios.post(`${API_BASE}/api/auth/refresh`, null, {
-      headers: { Authorization: `Bearer ${token}` }
+    const res = await axios.post(`${apiBase}/api/auth/refresh`, null, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'X-Techsinno-Token': token
+      }
     });
     if (res.data && res.data.token) {
       store.set('auth_token', res.data.token);
@@ -128,15 +166,19 @@ async function ensureElectronToken() {
 
 ipcMain.handle('api-call', async (_, method, apiPath, body) => {
   try {
-    if (!API_BASE) return { error: 'API URL not configured' };
+    const apiBase = getApiBase();
+    if (!apiBase) return { error: 'API URL not configured' };
     await ensureElectronToken();
     const token = store.get('auth_token');
     const config = {
       method,
-      url: `${API_BASE}/api${apiPath}`,
+      url: `${apiBase}/api${apiPath}`,
       headers: {}
     };
-    if (token) config.headers.Authorization = `Bearer ${token}`;
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+      config.headers['X-Techsinno-Token'] = token;
+    }
     if (body && (method === 'POST' || method === 'PUT')) {
       config.data = body;
       config.headers['Content-Type'] = 'application/json';
@@ -1821,16 +1863,21 @@ Return ONLY valid JSON array:
 
     // Auto-create CRM entries for email leads and cold email targets
     let crmCreated = 0;
-    if (API_BASE && store.get('auth_token')) {
+    const apiBase = getApiBase();
+    if (apiBase && store.get('auth_token')) {
       try {
         await ensureElectronToken();
         const token = store.get('auth_token');
-        const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+        const headers = {
+          Authorization: `Bearer ${token}`,
+          'X-Techsinno-Token': token,
+          'Content-Type': 'application/json'
+        };
 
         // Get existing CRM emails to avoid duplicates
         let existingEmails = new Set();
         try {
-          const crmRes = await axios.get(`${API_BASE}/api/clients`, { headers });
+          const crmRes = await axios.get(`${apiBase}/api/clients`, { headers });
           ((crmRes.data && crmRes.data.clients) || []).forEach(c => {
             if (c.email) existingEmails.add(c.email.toLowerCase());
           });
@@ -1840,7 +1887,7 @@ Return ONLY valid JSON array:
         for (const item of newItems) {
           if ((item.flagType === 'lead' || item.flagType === 'quote_request') && item.to && !existingEmails.has(item.to.toLowerCase())) {
             try {
-              await axios.post(`${API_BASE}/api/clients`, {
+              await axios.post(`${apiBase}/api/clients`, {
                 companyName: item.companyName || item.to.split('@')[1]?.split('.')[0] || 'Unknown',
                 contactName: item.contactName || '',
                 email: item.to,
@@ -1860,7 +1907,7 @@ Return ONLY valid JSON array:
               const targetKey = (target.company || '').toLowerCase();
               if (targetKey && !existingEmails.has(targetKey)) {
                 try {
-                  await axios.post(`${API_BASE}/api/clients`, {
+                  await axios.post(`${apiBase}/api/clients`, {
                     companyName: target.company,
                     contactName: item.contactTitle || '',
                     industry: item.targetSector === 'food processing' ? 'food_processing' : (item.targetSector || 'other'),

@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld('techsinno', {
   authLogin:         (u, p) => ipcRenderer.invoke('auth-login', u, p),
   authLogout:        ()     => ipcRenderer.invoke('auth-logout'),
   authGetUser:       ()     => ipcRenderer.invoke('auth-get-user'),
+  authGetApiBase:    ()     => ipcRenderer.invoke('auth-get-api-base'),
+  authSetApiBase:    (url)  => ipcRenderer.invoke('auth-set-api-base', url),
   authChangePassword:(c, n) => ipcRenderer.invoke('auth-change-password', c, n),
   // API proxy (calls Azure Functions)
   apiCall:           (method, path, body) => ipcRenderer.invoke('api-call', method, path, body),
