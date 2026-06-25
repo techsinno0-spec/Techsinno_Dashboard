@@ -2,6 +2,7 @@ const API_BASE = '';
 let _refreshing = null;
 
 async function ensureToken() {
+  if (window.techsinno) return;
   const token = localStorage.getItem('ts_token');
   if (!token) return;
   try {
@@ -20,6 +21,10 @@ async function ensureToken() {
 }
 
 async function apiCall(method, path, body = null) {
+  if (window.techsinno) {
+    return window.techsinno.apiCall(method, path, body);
+  }
+
   await ensureToken();
   const token = localStorage.getItem('ts_token');
   const headers = { 'Content-Type': 'application/json' };

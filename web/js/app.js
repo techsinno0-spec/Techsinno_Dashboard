@@ -72,6 +72,7 @@ function getUserName(id) {
 }
 
 async function initApp() {
+  await hydrateElectronAuth();
   if (!requireAuth()) return;
   const user = getUser();
 

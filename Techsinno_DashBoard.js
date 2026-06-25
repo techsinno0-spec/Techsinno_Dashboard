@@ -28,6 +28,18 @@ function getApiBase() {
   return app.isPackaged ? '' : 'http://127.0.0.1:7071';
 }
 
+function loadDashboard() {
+  if (mainWindow) {
+    return mainWindow.loadFile(path.join(__dirname, 'web', 'app.html'));
+  }
+}
+
+function loadLogin() {
+  if (mainWindow) {
+    return mainWindow.loadFile(path.join(__dirname, 'src', 'login.html'));
+  }
+}
+
 // ─── WINDOW ───────────────────────────────────────────────────────────────────
 
 function createWindow() {
@@ -50,9 +62,9 @@ function createWindow() {
   const sessionUser = store.get('auth_user');
   const hasSession = store.get('auth_token') && sessionUser?.role === 'manager';
   if (hasSession) {
-    mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
+    loadDashboard();
   } else {
-    mainWindow.loadFile(path.join(__dirname, 'src', 'login.html'));
+    loadLogin();
   }
 
   Menu.setApplicationMenu(Menu.buildFromTemplate([
@@ -97,7 +109,7 @@ ipcMain.handle('auth-login', async (_, username, password) => {
 ipcMain.handle('auth-logout', () => {
   store.delete('auth_token');
   store.delete('auth_user');
-  if (mainWindow) mainWindow.loadFile(path.join(__dirname, 'src', 'login.html'));
+  loadLogin();
   return true;
 });
 
@@ -189,7 +201,7 @@ ipcMain.handle('api-call', async (_, method, apiPath, body) => {
     if (e.response?.status === 401) {
       store.delete('auth_token');
       store.delete('auth_user');
-      if (mainWindow) mainWindow.loadFile(path.join(__dirname, 'src', 'login.html'));
+      loadLogin();
       return { error: 'Session expired' };
     }
     return { error: e.response?.data?.error || e.message };
