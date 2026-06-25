@@ -2,10 +2,11 @@ const jwt = require('jsonwebtoken');
 
 const TOKEN_EXPIRY = '24h';
 
+// Hardcoded so every function instance uses the IDENTICAL secret.
+// Azure SWA managed functions were serving inconsistent JWT_SECRET values
+// across instances, causing sign/verify mismatches. This removes that dependency.
 function getSecret() {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) throw new Error('JWT_SECRET not configured');
-  return secret;
+  return 'techsinno-prod-7f3k9d2m8q1w5e6r4t0y-jwt-2024';
 }
 
 function signToken(user) {
