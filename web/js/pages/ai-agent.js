@@ -104,12 +104,12 @@ async function aiSmartOutreach() {
     const leads = clients.filter(c => c.status === 'lead').slice(0, 5);
     if (leads.length) {
       const leadList = leads.map(c => `- ${c.companyName} (${c.industry || 'unknown industry'}, ${c.contactName || 'no contact'}, ${c.email || 'no email'})`).join('\n');
-      aiQuickAction(`I have these leads in my CRM that haven't been contacted yet:\n${leadList}\n\nPick the best one and draft a personalized cold outreach email for them. Reference their specific industry and how TECHSINNO's PLC/SCADA, PCB repair, or IoT services solve their pain points. Include Subject: and Body: lines ready to send.`);
+      aiQuickAction(`I have these leads in my CRM that haven't been contacted yet:\n${leadList}\n\nAct as a TECHSINNO business scout, not a generic email writer. Pick the best lead and do this:\n1. Identify the most likely operational pain for that company/industry.\n2. Explain the evidence and assumptions.\n3. Match it to one TECHSINNO service: PCB repair, PLC/SCADA automation, IoT monitoring, diagnostics, or preventive maintenance.\n4. Suggest a low-friction first step.\n5. Then draft a short specific email with Subject: and Body: lines.\nAvoid generic phrases like "innovative solutions" or "streamline operations". Do not invent past work.`);
     } else {
-      aiQuickAction('Draft a cold outreach email to a manufacturing company in the Western Cape. Make it professional and reference our PLC/SCADA and industrial electronics services. Include Subject: and Body: lines.');
+      aiQuickAction('Act as a TECHSINNO business scout. Pick one Western Cape sector where factories/farms/food processors likely have a real operational pain. Diagnose the pain, explain the assumption, match it to a TECHSINNO service, suggest a first step, then draft a short specific outreach email with Subject: and Body: lines. Do not write a generic sales email.');
     }
   } catch {
-    aiQuickAction('Draft a cold outreach email to a manufacturing company in the Western Cape. Make it professional and reference our PLC/SCADA and industrial electronics services.');
+    aiQuickAction('Act as a TECHSINNO business scout. Diagnose one real likely problem for a Western Cape manufacturing company, match it to a TECHSINNO service, then draft a short specific outreach email.');
   }
 }
 

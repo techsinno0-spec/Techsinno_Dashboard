@@ -2129,6 +2129,15 @@ function agentRenderItem(item) {
       <button class="btn bo bsm" onclick="agentEditItem('${item.id}')"><i class="ti ti-edit" style="margin-right:3px"></i>Edit</button>`;
   })();
 
+  const diagnostic = (item.painPoint || item.evidence || item.techsinnoSolution || item.nextStep) ? `
+    <div style="background:rgba(95,168,196,.08);border:1px solid rgba(95,168,196,.18);border-radius:var(--radius-sm);padding:8px 10px;margin:7px 0">
+      <div style="font-size:10px;color:var(--brand-mid);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Problem spotted</div>
+      ${item.painPoint ? `<div style="font-size:11px;color:var(--text);margin-bottom:3px"><strong>Pain:</strong> ${esc(item.painPoint)}</div>` : ''}
+      ${item.evidence ? `<div style="font-size:10px;color:var(--text2);margin-bottom:3px"><strong>Evidence/assumption:</strong> ${esc(item.evidence)}</div>` : ''}
+      ${item.techsinnoSolution ? `<div style="font-size:10px;color:var(--text2);margin-bottom:3px"><strong>TECHSINNO fit:</strong> ${esc(item.techsinnoSolution)}</div>` : ''}
+      ${item.nextStep ? `<div style="font-size:10px;color:var(--accent)"><strong>First step:</strong> ${esc(item.nextStep)}</div>` : ''}
+    </div>` : '';
+
   return `<div style="background:var(--bg3);border:1px solid var(--border);border-left:3px solid ${flagColor};border-radius:var(--radius);padding:11px 13px;margin-bottom:8px">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px">
       <div style="flex:1;min-width:0">
@@ -2138,6 +2147,7 @@ function agentRenderItem(item) {
       <span onclick="agentDismissItem('${item.id}')" title="Skip" style="cursor:pointer;color:var(--text3);font-size:18px;line-height:1;flex-shrink:0">×</span>
     </div>
     ${toField}
+    ${diagnostic}
     <div style="font-size:11px;color:var(--text2);line-height:1.5;margin:6px 0 9px;background:var(--bg4);padding:7px 9px;border-radius:var(--radius-sm)">${preview}${item.body&&item.body.length>120?'…':''}</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap">${actions}</div>
   </div>`;
@@ -2869,9 +2879,9 @@ async function elSmartOutreach() {
     const leads = clients.filter(c => c.status === 'lead').slice(0, 5);
     if (leads.length) {
       const list = leads.map(c => `- ${c.companyName} (${c.industry || 'unknown'}, ${c.contactName || 'no contact'}, ${c.email || 'no email'})`).join('\n');
-      quickAsk(`I have these leads in my CRM:\n${list}\n\nPick the best one and draft a personalized cold outreach email. Reference their specific industry and how TECHSINNO's PLC/SCADA, PCB repair, or IoT services solve their pain points. Include Subject: and Body: lines ready to send.`);
-    } else { quickAsk('Draft a cold outreach email to a manufacturing company in the Western Cape. Reference our PLC/SCADA and industrial electronics services. Include Subject: and Body: lines.'); }
-  } catch { quickAsk('Draft a cold outreach email to a manufacturing company in the Western Cape.'); }
+      quickAsk(`I have these leads in my CRM:\n${list}\n\nAct as a TECHSINNO business scout, not a generic email writer. Pick the best lead and do this:\n1. Identify the most likely operational pain for that company/industry.\n2. Explain the evidence and assumptions.\n3. Match it to one TECHSINNO service: PCB repair, PLC/SCADA automation, IoT monitoring, diagnostics, or preventive maintenance.\n4. Suggest a low-friction first step.\n5. Then draft a short specific email with Subject: and Body: lines.\nAvoid generic phrases like "innovative solutions" or "streamline operations". Do not invent past work.`);
+    } else { quickAsk('Act as a TECHSINNO business scout. Pick one Western Cape sector where factories/farms/food processors likely have a real operational pain. Diagnose the pain, explain the assumption, match it to a TECHSINNO service, suggest a first step, then draft a short specific outreach email with Subject: and Body: lines. Do not write a generic sales email.'); }
+  } catch { quickAsk('Act as a TECHSINNO business scout. Diagnose one real likely problem for a Western Cape manufacturing company, match it to a TECHSINNO service, then draft a short specific outreach email.'); }
 }
 
 async function elSmartFollowUp() {
