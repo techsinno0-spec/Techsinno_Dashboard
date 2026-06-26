@@ -3,6 +3,7 @@ let tasksDetailId = null;
 let _completionTask = null;
 let _allTasks = [];
 let weeklyPlanWeek = 0;
+let teamTasksTab = 'tasks';
 
 const WEB_WEEK_DEFAULTS = [
   { l: 'Week 1', t: [{ x: 'Open business bank account', g: 'admin', s: 'eve', d: false }, { x: 'Register on SARS eFiling', g: 'admin', s: 'eve', d: false }, { x: 'Update CIPC customer profile', g: 'admin', s: 'eve', d: false }] },
@@ -18,18 +19,29 @@ const WEB_WEEK_DEFAULTS = [
 async function render_tasks() {
   const el = document.getElementById('page-tasks');
   const role = getUser().role;
-  if (role === 'manager') {
+  if (role === 'manager' && window._taskView !== 'team') {
     return renderWeeklyPlan();
   }
 
   el.innerHTML = '<div class="spin"></div> Loading tasks...';
 
   try {
+    if (role === 'manager' && window._taskView === 'team' && teamTasksTab === 'recurring') {
+      return renderRecurringTasks(el);
+    }
+
     const data = await apiGet('/tasks');
     const tasks = (data && data.tasks) || [];
     _allTasks = tasks;
 
     let html = '';
+
+    if (role === 'manager' && window._taskView === 'team') {
+      html += `<div class="wtabs" style="margin-bottom:10px">
+        <div class="wtab ${teamTasksTab === 'tasks' ? 'active' : ''}" onclick="teamTasksTab='tasks';render_tasks()">Individual tasks</div>
+        <div class="wtab ${teamTasksTab === 'recurring' ? 'active' : ''}" onclick="teamTasksTab='recurring';render_tasks()">Recurring tasks</div>
+      </div>`;
+    }
 
     // Filter tabs
     html += `<div class="wtabs">
@@ -159,6 +171,115 @@ async function addWeeklyTask() {
   });
   await saveWeeklySyncState(data);
   input.value = '';
+  render_tasks();
+}
+
+async function renderRecurringTasks(el) {
+  let html = `<div class="wtabs" style="margin-bottom:10px">
+    <div class="wtab" onclick="teamTasksTab='tasks';render_tasks()">Individual tasks</div>
+    <div class="wtab active" onclick="teamTasksTab='recurring';render_tasks()">Recurring tasks</div>
+  </div>
+  <div style="margin-bottom:14px">
+    <button class="btn" onclick="showRecurringTaskForm()"><i class="ti ti-plus" style="font-size:13px"></i> New Recurring Task</button>
+  </div>
+  <div id="recurringTaskForm" style="display:none"></div>`;
+
+  try {
+    const data = await apiGet('/tasks/recurring');
+    const rules = (data && data.rules) || [];
+    if (!rules.length) {
+      html += '<div class="empty-state"><i class="ti ti-repeat"></i>No recurring task rules yet</div>';
+    } else {
+      html += rules.map(r => {
+        const schedule = r.frequency === 'weekly'
+          ? `Weekly · day ${r.dayOfWeek}`
+          : r.frequency === 'monthly'
+            ? `Monthly · day ${r.dayOfMonth}`
+            : 'Daily';
+        return `<div class="card" style="margin-bottom:8px;opacity:${r.active === false ? '.55' : '1'}">
+          <div style="display:flex;align-items:flex-start;gap:10px">
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:500;color:var(--text)">${escHtml(r.title)}</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:3px">
+                <i class="ti ti-repeat" style="font-size:10px"></i> ${escHtml(schedule)}
+                · ${escHtml(getUserName(r.assignedTo))}
+                · ${escHtml(r.category || 'general')}
+                · ${escHtml(r.priority || 'medium')}
+                ${r.active === false ? ' · paused' : ''}
+              </div>
+            </div>
+            <button class="btn bsm bo" onclick="toggleRecurringTask('${r.id}',${r.active === false})">${r.active === false ? 'Resume' : 'Pause'}</button>
+            <button class="btn bsm bdng" onclick="deleteRecurringTask('${r.id}')">Delete</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+    el.innerHTML = html;
+  } catch {
+    el.innerHTML = '<div class="empty-state"><i class="ti ti-alert-circle"></i>Failed to load recurring tasks</div>';
+  }
+}
+
+function showRecurringTaskForm() {
+  const el = document.getElementById('recurringTaskForm');
+  if (!el) return;
+  if (el.style.display === 'block') { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  el.innerHTML = `<div class="card" style="margin-bottom:14px">
+    <div class="ctitle">Create Recurring Task</div>
+    <div class="flbl">Title *</div>
+    <input id="recTaskTitle" style="width:100%" placeholder="Task title">
+    <div class="flbl">Person in charge *</div>
+    <select id="recTaskAssign" style="width:100%">
+      <option value="">Select person</option>
+      ${appUsers.filter(u => u.active).map(u => `<option value="${u.id}">${escHtml(u.displayName)}</option>`).join('')}
+    </select>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <div style="flex:1"><div class="flbl">Frequency</div><select id="recTaskFreq" style="width:100%" onchange="document.getElementById('recWeeklyRow').style.display=this.value==='weekly'?'block':'none';document.getElementById('recMonthlyRow').style.display=this.value==='monthly'?'block':'none'"><option value="daily">Daily</option><option value="weekly" selected>Weekly</option><option value="monthly">Monthly</option></select></div>
+      <div style="flex:1"><div class="flbl">Priority</div><select id="recTaskPriority" style="width:100%"><option value="medium">Medium</option><option value="high">High</option><option value="low">Low</option></select></div>
+      <div style="flex:1"><div class="flbl">Category</div><select id="recTaskCategory" style="width:100%"><option value="general">General</option><option value="admin">Admin</option><option value="repair">Repair</option><option value="auto">Automation</option><option value="iot">IoT</option></select></div>
+    </div>
+    <div id="recWeeklyRow"><div class="flbl">Day of week</div><select id="recTaskDay" style="width:100%"><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="0">Sunday</option></select></div>
+    <div id="recMonthlyRow" style="display:none"><div class="flbl">Day of month</div><input id="recTaskMonthDay" type="number" min="1" max="31" value="1" style="width:100%"></div>
+    <div class="flbl">Description</div>
+    <textarea id="recTaskDesc" style="width:100%" placeholder="Optional notes"></textarea>
+    <div style="display:flex;gap:6px;margin-top:12px"><button class="btn" onclick="submitRecurringTask()">Create rule</button><button class="btn bo" onclick="document.getElementById('recurringTaskForm').style.display='none'">Cancel</button></div>
+  </div>`;
+}
+
+async function submitRecurringTask() {
+  const title = document.getElementById('recTaskTitle').value.trim();
+  const assignedTo = document.getElementById('recTaskAssign').value;
+  if (!title) return ntf('Title is required');
+  if (!assignedTo) return ntf('Person in charge is required');
+  const frequency = document.getElementById('recTaskFreq').value;
+  const body = {
+    title,
+    assignedTo,
+    description: document.getElementById('recTaskDesc').value.trim(),
+    frequency,
+    priority: document.getElementById('recTaskPriority').value,
+    category: document.getElementById('recTaskCategory').value
+  };
+  if (frequency === 'weekly') body.dayOfWeek = document.getElementById('recTaskDay').value;
+  if (frequency === 'monthly') body.dayOfMonth = document.getElementById('recTaskMonthDay').value;
+  const data = await apiPost('/tasks/recurring', body);
+  if (data && data.error) return ntf(data.error);
+  ntf('Recurring task created');
+  render_tasks();
+}
+
+async function toggleRecurringTask(id, shouldResume) {
+  const data = await apiPut('/tasks/recurring/' + id, { active: !!shouldResume });
+  if (data && data.error) return ntf(data.error);
+  render_tasks();
+}
+
+async function deleteRecurringTask(id) {
+  if (!confirm('Delete this recurring rule?')) return;
+  const data = await apiDelete('/tasks/recurring/' + id);
+  if (data && data.error) return ntf(data.error);
+  ntf('Recurring rule deleted');
   render_tasks();
 }
 

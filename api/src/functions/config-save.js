@@ -31,6 +31,9 @@ app.http('config-save', {
       if (body.apiKey !== undefined) config.apiKey = body.apiKey;
       if (body.zoneId !== undefined) config.zoneId = body.zoneId;
       if (body.personalUrl !== undefined) config.personalUrl = body.personalUrl;
+      if (body.region !== undefined) config.region = body.region;
+      if (body.accountId !== undefined) config.accountId = body.accountId;
+      if (body.aliases !== undefined) config.aliases = Array.isArray(body.aliases) ? body.aliases : [];
       if (body.accessToken !== undefined) config.accessToken = body.accessToken;
       if (body.refreshToken !== undefined) config.refreshToken = body.refreshToken;
       if (body.tokenExpiry !== undefined) config.tokenExpiry = body.tokenExpiry;

@@ -563,6 +563,12 @@ async function cloudSyncSavePatch(patch) {
   return res;
 }
 
+async function cloudConfigSave(service, body) {
+  try {
+    await cloudApi('PUT', `/config/${service}`, body);
+  } catch {}
+}
+
 // ─── OPEN EXTERNAL URL ────────────────────────────────────────────────────────
 
 ipcMain.handle('open-url', (_, u) => { shell.openExternal(u); return true; });
@@ -657,10 +663,11 @@ ipcMain.handle('gmail-get-config', () => ({
   connected: !!store.get('gmail_access_token')
 }));
 
-ipcMain.handle('gmail-save-config', (_, { clientId, clientSecret }) => {
+ipcMain.handle('gmail-save-config', async (_, { clientId, clientSecret }) => {
   store.set('gmail_client_id', clientId);
   store.set('gmail_client_secret', clientSecret);
   ['gmail_access_token','gmail_refresh_token','gmail_token_expiry'].forEach(k => store.delete(k));
+  await cloudConfigSave('gmail', { clientId, clientSecret });
   return true;
 });
 
@@ -681,6 +688,13 @@ ipcMain.handle('gmail-connect', async () => {
         store.set('gmail_access_token', r.data.access_token);
         store.set('gmail_refresh_token', r.data.refresh_token);
         store.set('gmail_token_expiry', Date.now() + r.data.expires_in * 1000);
+        await cloudConfigSave('gmail', {
+          clientId: store.get('gmail_client_id'),
+          clientSecret: store.get('gmail_client_secret'),
+          accessToken: r.data.access_token,
+          refreshToken: r.data.refresh_token,
+          tokenExpiry: store.get('gmail_token_expiry')
+        });
         gmailServer.close(); resolve({ success: true });
       } catch(e) { gmailServer.close(); resolve({ error: e.message }); }
     });
@@ -891,10 +905,11 @@ ipcMain.handle('ms-get-config', () => ({
   connected: !!store.get('ms_access_token')
 }));
 
-ipcMain.handle('ms-save-config', (_, { clientId, clientSecret }) => {
+ipcMain.handle('ms-save-config', async (_, { clientId, clientSecret }) => {
   store.set('ms_client_id', clientId);
   store.set('ms_client_secret', clientSecret);
   ['ms_access_token','ms_refresh_token','ms_token_expiry'].forEach(k => store.delete(k));
+  await cloudConfigSave('outlook', { clientId, clientSecret });
   return true;
 });
 
@@ -915,6 +930,13 @@ ipcMain.handle('ms-connect', async () => {
         store.set('ms_access_token', r.data.access_token);
         store.set('ms_refresh_token', r.data.refresh_token);
         store.set('ms_token_expiry', Date.now() + r.data.expires_in * 1000);
+        await cloudConfigSave('outlook', {
+          clientId: store.get('ms_client_id'),
+          clientSecret: store.get('ms_client_secret'),
+          accessToken: r.data.access_token,
+          refreshToken: r.data.refresh_token,
+          tokenExpiry: store.get('ms_token_expiry')
+        });
         msServer.close(); resolve({ success: true });
       } catch(e) { msServer.close(); resolve({ error: e.message }); }
     });
@@ -1234,11 +1256,12 @@ ipcMain.handle('zohomail-get-config', () => ({
   region:       store.get('zohomail_region', 'com')
 }));
 
-ipcMain.handle('zohomail-save-config', (_, { clientId, clientSecret, region }) => {
+ipcMain.handle('zohomail-save-config', async (_, { clientId, clientSecret, region }) => {
   store.set('zohomail_client_id', clientId);
   store.set('zohomail_client_secret', clientSecret);
   if (region) store.set('zohomail_region', region);
   ['zohomail_access_token','zohomail_refresh_token','zohomail_token_expiry','zohomail_account_id'].forEach(k => store.delete(k));
+  await cloudConfigSave('zoho_mail', { clientId, clientSecret, region: region || store.get('zohomail_region', 'com') });
   return true;
 });
 
@@ -1331,6 +1354,16 @@ ipcMain.handle('zohomail-connect', async () => {
 
         zohomailServer.close();
         if (gotAccount) {
+          await cloudConfigSave('zoho_mail', {
+            clientId: store.get('zohomail_client_id'),
+            clientSecret: store.get('zohomail_client_secret'),
+            region: store.get('zohomail_region', 'com'),
+            accessToken: store.get('zohomail_access_token'),
+            refreshToken: store.get('zohomail_refresh_token'),
+            tokenExpiry: store.get('zohomail_token_expiry'),
+            accountId: store.get('zohomail_account_id'),
+            aliases: store.get('zohomail_aliases', [])
+          });
           resolve({ success: true, region: store.get('zohomail_region') });
         } else {
           resolve({ error: 'Connected but failed to get account info. Token saved — try refreshing the page.' });

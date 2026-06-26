@@ -15,6 +15,7 @@ async function loadEmailAccounts() {
   try {
     const data = await apiGet('/email/accounts');
     _emailAccounts = data.accounts || {};
+    if (window._pendingEmailProvider) _activeProvider = window._pendingEmailProvider;
 
     const providers = [
       { key: 'gmail', label: 'Gmail', icon: 'ti-brand-gmail', color: '#EA4335' },
@@ -55,6 +56,13 @@ async function loadEmailAccounts() {
 
     if (_activeProvider && _emailAccounts[_activeProvider]?.connected) {
       openProviderInbox(_activeProvider);
+    } else if (_activeProvider && _emailAccounts[_activeProvider] && !_emailAccounts[_activeProvider].connected) {
+      const labels = { gmail: 'Gmail', outlook: 'Outlook', zoho_mail: 'Zoho Mail' };
+      document.getElementById('emailInboxArea').innerHTML = `<div class="card" style="margin-top:16px;text-align:center;padding:28px">
+        <i class="ti ti-mail-off" style="font-size:28px;color:var(--text3);display:block;margin-bottom:8px"></i>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:8px">${labels[_activeProvider] || 'Mailbox'} is not connected yet.</div>
+        <button class="btn bsm" onclick="connectEmail('${_activeProvider}')">Connect ${labels[_activeProvider] || 'mail'}</button>
+      </div>`;
     }
   } catch (err) {
     el.innerHTML = '<div class="empty-state"><i class="ti ti-alert-circle"></i>Failed to load email accounts</div>';

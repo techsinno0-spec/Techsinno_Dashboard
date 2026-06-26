@@ -35,7 +35,7 @@ app.http('jobcards-create', {
           clientName: sanitizeString(source.clientName || source.client || 'Unknown client', 200),
           clientContact: sanitizeString(source.clientContact || '', 200),
           site: sanitizeString(source.site || '', 200),
-          status: source.status || 'open',
+          status: source.status === 'active' ? 'open' : (source.status || 'open'),
           assignedTo: Array.isArray(source.assignedTo) ? source.assignedTo : [],
           tasks: Array.isArray(source.tasks) ? source.tasks : [],
           parts: Array.isArray(source.parts) ? source.parts : [],

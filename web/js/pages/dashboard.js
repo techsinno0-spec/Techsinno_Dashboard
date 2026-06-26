@@ -31,11 +31,11 @@ async function render_dashboard() {
 
     if (role === 'manager') {
       html += `<div class="wtabs manager-actions">
-        <button class="wtab active" onclick="navigateTo('communications')"><i class="ti ti-edit" style="font-size:11px;margin-right:3px"></i>Compose</button>
-        <button class="wtab" onclick="navigateTo('communications')"><i class="ti ti-mail" style="font-size:11px;margin-right:3px;color:#5fa8c4"></i>Zoho Mail</button>
-        <button class="wtab" onclick="navigateTo('inboxes')"><i class="ti ti-brand-gmail" style="font-size:11px;margin-right:3px;color:#f85149"></i>Gmail</button>
-        <button class="wtab" onclick="navigateTo('inboxes')"><i class="ti ti-mail" style="font-size:11px;margin-right:3px;color:#0078d4"></i>Outlook</button>
-        <button class="wtab" onclick="navigateTo('agent')"><i class="ti ti-checklist" style="font-size:11px;margin-right:3px"></i>Tasks</button>
+        <button class="wtab active" onclick="navigateTo('inboxes')"><i class="ti ti-edit" style="font-size:11px;margin-right:3px"></i>Compose</button>
+        <button class="wtab" onclick="navigateTo('inboxes',{provider:'zoho_mail',navId:'mail-zoho'})"><i class="ti ti-mail" style="font-size:11px;margin-right:3px;color:#5fa8c4"></i>Zoho Mail</button>
+        <button class="wtab" onclick="navigateTo('inboxes',{provider:'gmail',navId:'mail-gmail'})"><i class="ti ti-brand-gmail" style="font-size:11px;margin-right:3px;color:#f85149"></i>Gmail</button>
+        <button class="wtab" onclick="navigateTo('inboxes',{provider:'outlook',navId:'mail-outlook'})"><i class="ti ti-mail" style="font-size:11px;margin-right:3px;color:#0078d4"></i>Outlook</button>
+        <button class="wtab" onclick="navigateTo('tasks',{taskView:'team',navId:'team-tasks'})"><i class="ti ti-checklist" style="font-size:11px;margin-right:3px"></i>Tasks</button>
         <button class="wtab" onclick="navigateTo('zoho')"><i class="ti ti-chart-bar" style="font-size:11px;margin-right:3px"></i>Zoho</button>
         <button class="wtab ask-claude" onclick="navigateTo('agent')"><i class="ti ti-sparkles" style="font-size:11px;margin-right:3px"></i>Ask Claude</button>
       </div>`;

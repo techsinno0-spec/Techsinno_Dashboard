@@ -1,7 +1,7 @@
 const NAV_CONFIG = [
   { section: 'Overview' },
   { id: 'dashboard', icon: 'ti-layout-dashboard', label: 'Dashboard', roles: ['manager', 'staff'] },
-  { id: 'tasks', icon: 'ti-checklist', label: 'Weekly tasks', roles: ['manager', 'staff'] },
+  { id: 'tasks', icon: 'ti-checklist', label: 'Weekly tasks', roles: ['manager', 'staff'], taskView: 'weekly' },
   { section: 'Business', roles: ['manager'] },
   { id: 'goals', icon: 'ti-target', label: '90-day goals', roles: ['manager'] },
   { id: 'zoho', icon: 'ti-chart-bar', label: 'Zoho Books', roles: ['manager'] },
@@ -14,13 +14,13 @@ const NAV_CONFIG = [
   { section: 'Automation' },
   { id: 'agent', icon: 'ti-robot', label: 'AI Agent', roles: ['manager', 'staff'] },
   { section: 'Mail', roles: ['manager'] },
-  { id: 'mail-zoho', target: 'communications', icon: 'ti-mail', label: 'Zoho Mail', roles: ['manager'] },
-  { id: 'mail-gmail', target: 'inboxes', icon: 'ti-brand-gmail', label: 'Gmail', roles: ['manager'] },
-  { id: 'mail-outlook', target: 'inboxes', icon: 'ti-mail', label: 'Outlook', roles: ['manager'] },
+  { id: 'mail-zoho', target: 'inboxes', icon: 'ti-mail', label: 'Zoho Mail', roles: ['manager'], provider: 'zoho_mail' },
+  { id: 'mail-gmail', target: 'inboxes', icon: 'ti-brand-gmail', label: 'Gmail', roles: ['manager'], provider: 'gmail' },
+  { id: 'mail-outlook', target: 'inboxes', icon: 'ti-mail', label: 'Outlook', roles: ['manager'], provider: 'outlook' },
   { section: 'Production' },
   { id: 'job-cards', icon: 'ti-tool', label: 'Job Tasks', roles: ['manager', 'staff'] },
   { section: 'Team', roles: ['manager'] },
-  { id: 'projects', icon: 'ti-layout-kanban', label: 'Team Tasks', roles: ['manager', 'staff'] },
+  { id: 'team-tasks', target: 'tasks', icon: 'ti-checklist', label: 'Team Tasks', roles: ['manager', 'staff'], taskView: 'team' },
   { id: 'team', icon: 'ti-users', label: 'Team Mgmt', roles: ['manager'] },
   { id: 'staff-activity', icon: 'ti-activity', label: 'Staff Activity', roles: ['manager'] },
   { id: 'task-reports', icon: 'ti-report-analytics', label: 'Task Reports', roles: ['manager'] },
@@ -32,6 +32,7 @@ const NAV_CONFIG = [
 ];
 
 let currentPage = 'dashboard';
+let currentNavId = 'dashboard';
 
 function buildSidebar() {
   const role = getUser().role;
@@ -50,20 +51,25 @@ function buildSidebar() {
     if (!item.roles.includes(role)) return;
     const targetPage = item.target || item.id;
     const el = document.createElement('div');
-    el.className = 'nav-item' + (item.id === currentPage ? ' active' : '');
+    el.className = 'nav-item' + (item.id === currentNavId ? ' active' : '');
     el.dataset.page = item.id;
     el.innerHTML = `<i class="ti ${item.icon}"></i>${item.label}`;
-    el.addEventListener('click', () => navigateTo(targetPage));
+    el.addEventListener('click', () => navigateTo(targetPage, { navId: item.id, provider: item.provider, taskView: item.taskView }));
     nav.appendChild(el);
   });
 }
 
-function navigateTo(pageId) {
+function navigateTo(pageId, opts = {}) {
   const role = getUser().role;
-  const navItem = NAV_CONFIG.find(n => n.id === pageId);
+  const navItem = NAV_CONFIG.find(n => n.id === (opts.navId || pageId));
   if (navItem && !navItem.roles.includes(role)) return;
 
   currentPage = pageId;
+  currentNavId = opts.navId || pageId;
+  if (opts.provider) window._pendingEmailProvider = opts.provider;
+  else if (pageId !== 'inboxes') window._pendingEmailProvider = null;
+  if (opts.taskView) window._taskView = opts.taskView;
+  else if (pageId !== 'tasks') window._taskView = null;
 
   const sidebar = document.getElementById('sidebarEl');
   const overlay = document.getElementById('sidebarOverlay');
@@ -75,7 +81,7 @@ function navigateTo(pageId) {
   if (page) page.classList.add('active');
 
   document.querySelectorAll('.nav-item').forEach(n => {
-    n.classList.toggle('active', n.dataset.page === pageId);
+    n.classList.toggle('active', n.dataset.page === currentNavId);
   });
 
   const titles = {
@@ -99,6 +105,17 @@ function navigateTo(pageId) {
     'staff-activity': ['Staff Activity', 'Monitor team activity'],
     'task-reports': ['Task Reports', 'Team performance & analytics'],
   };
+
+  if (pageId === 'tasks') {
+    titles.tasks = [
+      window._taskView === 'team' ? 'Team Tasks' : 'Weekly tasks',
+      window._taskView === 'team' ? 'Assign & track team tasks' : (isManager() ? 'Evenings & weekends · 8–12 hrs/week' : 'Your assigned tasks')
+    ];
+  }
+  if (pageId === 'inboxes') {
+    const providerTitle = { gmail: 'Gmail', outlook: 'Outlook', zoho_mail: 'Zoho Mail' }[window._pendingEmailProvider];
+    titles.inboxes = providerTitle ? [providerTitle, 'Dedicated mailbox'] : ['All Inboxes', 'Unified email'];
+  }
 
   const t = titles[pageId] || [pageId, ''];
   document.getElementById('pageTitle').textContent = t[0];

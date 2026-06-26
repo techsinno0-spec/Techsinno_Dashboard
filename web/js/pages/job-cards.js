@@ -1,5 +1,5 @@
 // ─── JOB CARDS PAGE ───────────────────────────────────────────────────────────
-let jcFilter = 'all';
+let jcFilter = 'active';
 let jcDetailId = null;
 let _allJobCards = [];
 
@@ -19,10 +19,9 @@ async function render_job_cards() {
     // Filter tabs
     html += `<div class="wtabs">
       <div class="wtab ${jcFilter === 'all' ? 'active' : ''}" onclick="setJCFilter('all')">All</div>
-      <div class="wtab ${jcFilter === 'open' ? 'active' : ''}" onclick="setJCFilter('open')">Open</div>
-      <div class="wtab ${jcFilter === 'in_progress' ? 'active' : ''}" onclick="setJCFilter('in_progress')">In Progress</div>
-      <div class="wtab ${jcFilter === 'on_hold' ? 'active' : ''}" onclick="setJCFilter('on_hold')">On Hold</div>
-      <div class="wtab ${jcFilter === 'completed' ? 'active' : ''}" onclick="setJCFilter('completed')">Completed</div>
+      <div class="wtab ${jcFilter === 'active' ? 'active' : ''}" onclick="setJCFilter('active')">Job active</div>
+      <div class="wtab ${jcFilter === 'pending' ? 'active' : ''}" onclick="setJCFilter('pending')">Job pending / blocked</div>
+      <div class="wtab ${jcFilter === 'completed' ? 'active' : ''}" onclick="setJCFilter('completed')">Job done</div>
     </div>`;
 
     if (role === 'manager') {
@@ -32,7 +31,13 @@ async function render_job_cards() {
       <div id="createJCForm" style="display:none"></div>`;
     }
 
-    const filtered = jcFilter === 'all' ? cards : cards.filter(c => c.status === jcFilter);
+    const filtered = jcFilter === 'all' ? cards : cards.filter(c => {
+      const status = c.status === 'active' ? 'open' : c.status;
+      if (jcFilter === 'active') return ['open', 'in_progress'].includes(status);
+      if (jcFilter === 'pending') return ['on_hold', 'blocked', 'pending'].includes(status);
+      if (jcFilter === 'completed') return status === 'completed';
+      return status === jcFilter;
+    });
 
     if (filtered.length === 0) {
       html += '<div class="empty-state"><i class="ti ti-clipboard-list"></i>No job cards found</div>';
@@ -48,7 +53,7 @@ async function render_job_cards() {
             <div style="flex:1">
               <div style="display:flex;align-items:center;gap:7px;margin-bottom:4px">
                 <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text3)">${escHtml(jc.jobNumber)}</span>
-                ${jcStatusBadge(jc.status)}
+                ${jcStatusBadge(jc.status === 'active' ? 'open' : jc.status)}
               </div>
               <div style="font-size:13px;font-weight:500;color:var(--text)">${escHtml(jc.title)}</div>
               <div style="font-size:11px;color:var(--text3);margin-top:3px">
@@ -58,7 +63,10 @@ async function render_job_cards() {
               </div>
               ${progress !== null ? `<div style="margin-top:8px;max-width:300px">
                 <div class="pt"><div class="pf pf-brand" style="width:${progress}%"></div></div>
+                <div style="font-size:10px;color:var(--text3);margin-top:3px">${progress}% progress</div>
               </div>` : ''}
+              ${(jc.status === 'on_hold' || jc.status === 'blocked') && (jc.blockReason || jc.blockedReason || jc.notes?.length) ? `<div style="font-size:10px;color:#f85149;margin-top:5px">Block: ${escHtml(jc.blockReason || jc.blockedReason || jc.notes?.[jc.notes.length - 1]?.text || 'Waiting for update')}</div>` : ''}
+              ${jc.status === 'completed' ? `<div style="font-size:10px;color:#3fb950;margin-top:5px">Completed${jc.completionSignOff ? ' · report signed off' : ''}</div>` : ''}
             </div>
             <div style="display:flex;gap:3px;align-items:center;flex-shrink:0">
               ${assigned.map(uid => `<div title="${escHtml(getUserName(uid))}" style="width:24px;height:24px;border-radius:50%;background:var(--brand);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff">${initials(getUserName(uid))}</div>`).join('')}
