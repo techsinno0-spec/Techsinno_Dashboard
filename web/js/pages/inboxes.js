@@ -25,6 +25,36 @@ async function loadEmailAccounts() {
 
     const connectedCount = providers.filter(p => _emailAccounts[p.key]?.connected).length;
 
+    if (_activeProvider) {
+      const p = providers.find(x => x.key === _activeProvider) || providers[0];
+      const acct = _emailAccounts[p.key];
+      const connected = !!acct?.connected;
+      el.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:var(--text)">
+              <i class="ti ${p.icon}" style="color:${p.color}"></i> ${escHtml(acct?.email || (p.key === 'zoho_mail' ? 'frank@techsinno.com' : p.label))}
+              ${p.key === 'zoho_mail' ? '<span class="tag t-a">PRIMARY</span>' : ''}
+            </div>
+            <div style="font-size:11px;color:var(--text3);margin-top:3px">${p.label} — read, reply, compose${p.key === 'zoho_mail' ? ' · AI scan' : ''}</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn bsm bo" onclick="render_inboxes()"><i class="ti ti-refresh" style="font-size:11px"></i> Refresh</button>
+            ${connected ? `<button class="btn bsm" onclick="openComposeModal('${p.key}')"><i class="ti ti-send" style="font-size:11px"></i> Compose</button>` : ''}
+            <button class="btn bsm bo" onclick="navigateTo('settings')"><i class="ti ti-settings" style="font-size:11px"></i></button>
+          </div>
+        </div>
+        <div id="emailInboxArea"></div>`;
+      if (connected) {
+        openProviderInbox(p.key);
+      } else {
+        document.getElementById('emailInboxArea').innerHTML = `<div class="card" style="padding:16px;color:var(--text2);font-size:12px">
+          Not connected — go to <a href="#" onclick="navigateTo('settings');return false" style="color:var(--brand-mid)">Settings</a> to connect ${escHtml(p.label)} first.
+        </div>`;
+      }
+      return;
+    }
+
     let cards = providers.map(p => {
       const acct = _emailAccounts[p.key];
       const connected = acct?.connected;
@@ -42,7 +72,7 @@ async function loadEmailAccounts() {
                <button class="btn bsm" onclick="event.stopPropagation();openProviderInbox('${p.key}')"><i class="ti ti-inbox" style="font-size:11px;margin-right:3px"></i> Inbox</button>
                <button class="btn bsm bdng" onclick="event.stopPropagation();disconnectEmail('${p.key}')">Disconnect</button>
              </div>`
-          : `<button class="btn bsm" onclick="connectEmail('${p.key}')">Connect ${p.label}</button>`}
+          : `<button class="btn bsm" onclick="navigateTo('settings')">Configure in Settings</button>`}
       </div>`;
     }).join('');
 

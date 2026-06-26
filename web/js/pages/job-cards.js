@@ -2,10 +2,16 @@
 let jcFilter = 'active';
 let jcDetailId = null;
 let _allJobCards = [];
+let jobTasksTab = 'tasks';
+let _jobManualTasks = [];
 
 async function render_job_cards() {
   const el = document.getElementById('page-job-cards');
   const role = getUser().role;
+
+  if (jobTasksTab === 'tasks') {
+    return renderProductionTasks(el);
+  }
 
   el.innerHTML = '<div class="spin"></div> Loading job cards...';
 
@@ -14,7 +20,7 @@ async function render_job_cards() {
     const cards = (data && data.jobCards) || [];
     _allJobCards = cards;
 
-    let html = '';
+    let html = renderJobTasksTabs();
 
     // Filter tabs
     html += `<div class="wtabs">
@@ -90,6 +96,111 @@ async function render_job_cards() {
   } catch (err) {
     el.innerHTML = '<div class="empty-state"><i class="ti ti-alert-circle"></i>Failed to load job cards</div>';
   }
+}
+
+function renderJobTasksTabs() {
+  return `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px;flex-wrap:wrap">
+    <div class="wtabs">
+      <button class="wtab ${jobTasksTab === 'tasks' ? 'active' : ''}" onclick="jobTasksTab='tasks';render_job_cards()"><i class="ti ti-checklist" style="font-size:11px"></i> Tasks</button>
+      <button class="wtab ${jobTasksTab === 'cards' ? 'active' : ''}" onclick="jobTasksTab='cards';render_job_cards()"><i class="ti ti-file-description" style="font-size:11px"></i> Job Cards</button>
+    </div>
+    <button class="btn bsm" style="background:#f0997b;color:#000" onclick="jobTasksTab='cards';render_job_cards()"><i class="ti ti-file-description" style="font-size:11px"></i> Job Cards (AI)</button>
+  </div>`;
+}
+
+async function loadJobManualTasks() {
+  const state = await syncLoad();
+  _jobManualTasks = (state && state.data && Array.isArray(state.data.manualTasks)) ? state.data.manualTasks : [];
+}
+
+async function saveJobManualTasks() {
+  const saved = await syncSave({ manualTasks: _jobManualTasks });
+  if (!saved || saved.error || saved.success === false) throw new Error(saved && saved.error ? saved.error : 'Cloud sync failed');
+}
+
+async function renderProductionTasks(el) {
+  el.innerHTML = '<div class="spin"></div> Loading production tasks...';
+  try { await loadJobManualTasks(); }
+  catch { el.innerHTML = '<div class="empty-state"><i class="ti ti-alert-circle"></i>Failed to load production tasks</div>'; return; }
+
+  const now = Date.now();
+  const priorityColor = { high:'#f85149', medium:'var(--accent)', low:'#3fb950' };
+  const rows = _jobManualTasks.length ? _jobManualTasks.map(t => {
+    const dl = t.deadline ? new Date(t.deadline + (t.time ? 'T' + t.time : 'T00:00')).getTime() : null;
+    const overdue = dl && dl < now && t.status !== 'done';
+    const soon = dl && dl < now + 3*86400000 && !overdue && t.status !== 'done';
+    const dlDate = dl ? new Date(dl).toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric'}) : '—';
+    return `<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 11px;background:var(--bg3);border:1px solid ${overdue?'rgba(248,81,73,.4)':soon?'rgba(244,163,0,.3)':'var(--border)'};border-radius:var(--radius);margin-bottom:6px;opacity:${t.status==='done'?'.5':'1'}">
+      <input type="checkbox" ${t.status==='done'?'checked':''} onchange="toggleProductionTask('${t.id}',this.checked)" style="width:15px;height:15px;flex-shrink:0;cursor:pointer;margin-top:2px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:500;color:var(--text);text-decoration:${t.status==='done'?'line-through':''}">${escHtml(t.title || '')}</div>
+        ${t.description?`<div style="font-size:11px;color:var(--text3);margin-top:2px">${escHtml(t.description)}</div>`:''}
+        <div style="display:flex;gap:8px;margin-top:4px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:10px;font-family:'DM Mono',monospace;color:${overdue?'#f85149':soon?'var(--accent)':'var(--text3)'}">${overdue?'OVERDUE · ':soon?'Soon · ':''}${dlDate}${t.time ? ' · ' + escHtml(t.time) : ''}</span>
+          <span style="font-size:10px;padding:1px 7px;border-radius:10px;background:rgba(0,0,0,.2);color:${priorityColor[t.priority]||'var(--text3)'}">${escHtml(t.priority||'medium')}</span>
+          ${t.reminder?`<span style="font-size:10px;color:var(--brand-mid)"><i class="ti ti-bell" style="font-size:10px"></i> reminder</span>`:''}
+        </div>
+      </div>
+      <button class="btn bo bsm" onclick="deleteProductionTask('${t.id}')">Delete</button>
+    </div>`;
+  }).join('') : '<div style="font-size:12px;color:var(--text3);text-align:center;padding:26px">No tasks yet — add one below.</div>';
+
+  el.innerHTML = `${renderJobTasksTabs()}
+  <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Track production tasks, set deadlines, and create AI job cards from Zoho quotes.</div>
+  <div class="card" style="margin-bottom:18px">
+    <div style="font-size:12px;font-weight:500;color:var(--text);margin-bottom:10px"><i class="ti ti-plus"></i> Add task</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <input id="prodTaskTitle" type="text" placeholder="Task title *" style="font-size:12px">
+      <select id="prodTaskPriority" style="font-size:12px"><option value="high">High priority</option><option value="medium" selected>Medium priority</option><option value="low">Low priority</option></select>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+      <div><div class="flbl">Deadline date</div><input id="prodTaskDeadline" type="date" style="width:100%"></div>
+      <div><div class="flbl">Deadline time</div><input id="prodTaskTime" type="time" style="width:100%"></div>
+      <div><div class="flbl">Remind me</div><select id="prodTaskReminder" style="width:100%"><option value="">No reminder</option><option value="15">15 min before</option><option value="30">30 min before</option><option value="60">1 hour before</option><option value="1440">1 day before</option></select></div>
+    </div>
+    <textarea id="prodTaskDesc" placeholder="Description / notes (optional)" style="width:100%;font-size:12px;min-height:54px;resize:vertical;margin-bottom:8px;box-sizing:border-box"></textarea>
+    <div style="display:flex;justify-content:flex-end"><button class="btn bsm" style="background:#3fb950" onclick="addProductionTask()"><i class="ti ti-plus" style="font-size:11px"></i> Add task</button></div>
+  </div>
+  <div>${rows}</div>`;
+}
+
+async function addProductionTask() {
+  const title = document.getElementById('prodTaskTitle')?.value.trim();
+  if (!title) return ntf('Task title is required');
+  const previous = [..._jobManualTasks];
+  _jobManualTasks.unshift({
+    id: 'mt_' + Date.now().toString(36),
+    title,
+    description: document.getElementById('prodTaskDesc')?.value.trim() || '',
+    deadline: document.getElementById('prodTaskDeadline')?.value || '',
+    time: document.getElementById('prodTaskTime')?.value || '',
+    reminder: document.getElementById('prodTaskReminder')?.value || '',
+    priority: document.getElementById('prodTaskPriority')?.value || 'medium',
+    status: 'pending',
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  });
+  try { await saveJobManualTasks(); }
+  catch { _jobManualTasks = previous; return ntf('Task was not saved to cloud'); }
+  ntf('Task added');
+  render_job_cards();
+}
+
+async function toggleProductionTask(id, done) {
+  const previous = [..._jobManualTasks];
+  _jobManualTasks = _jobManualTasks.map(t => t.id === id ? { ...t, status: done ? 'done' : 'pending', updatedAt: Date.now() } : t);
+  try { await saveJobManualTasks(); }
+  catch { _jobManualTasks = previous; return ntf('Task was not saved to cloud'); }
+  render_job_cards();
+}
+
+async function deleteProductionTask(id) {
+  const previous = [..._jobManualTasks];
+  _jobManualTasks = _jobManualTasks.filter(t => t.id !== id);
+  try { await saveJobManualTasks(); }
+  catch { _jobManualTasks = previous; return ntf('Task was not deleted from cloud'); }
+  ntf('Task deleted');
+  render_job_cards();
 }
 
 function setJCFilter(f) {

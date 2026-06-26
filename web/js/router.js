@@ -99,7 +99,7 @@ function navigateTo(pageId, opts = {}) {
     'reminders': ['Reminders', 'Schedule & deadlines'],
     'templates': ['Templates', 'Reusable email & outreach templates'],
     'settings': ['Settings', 'API credentials & config'],
-    'communications': ['Communications', 'Email & templates'],
+    'communications': ['Communications', 'Quote, meeting & web requests'],
     'agent': ['AI Agent', 'Operational assistant'],
     'team': ['Team Management', 'Manage staff accounts'],
     'staff-activity': ['Staff Activity', 'Monitor team activity'],

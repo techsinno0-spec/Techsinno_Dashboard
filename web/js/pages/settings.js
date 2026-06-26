@@ -1,6 +1,6 @@
 const SERVICES = [
   { key: 'zoho_books', label: 'Zoho Books', icon: 'ti-chart-bar', fields: ['clientId', 'clientSecret', 'orgId'] },
-  { key: 'zoho_mail', label: 'Zoho Mail', icon: 'ti-mail', fields: ['clientId', 'clientSecret'] },
+  { key: 'zoho_mail', label: 'Zoho Mail', icon: 'ti-mail', fields: ['clientId', 'clientSecret', 'region'] },
   { key: 'gmail', label: 'Gmail', icon: 'ti-brand-gmail', fields: ['clientId', 'clientSecret'] },
   { key: 'outlook', label: 'Outlook', icon: 'ti-brand-windows', fields: ['clientId', 'clientSecret'] },
   { key: 'linkedin', label: 'LinkedIn', icon: 'ti-brand-linkedin', fields: ['clientId', 'clientSecret'] },
@@ -15,7 +15,8 @@ const FIELD_LABELS = {
   clientSecret: 'Client Secret',
   orgId: 'Organization ID',
   apiKey: 'API Key',
-  zoneId: 'Zone ID'
+  zoneId: 'Zone ID',
+  region: 'Region'
 };
 
 async function render_settings() {
@@ -40,7 +41,10 @@ async function render_settings() {
           <div class="flbl">${FIELD_LABELS[f]}</div>
           <input type="${f.includes('Secret') || f === 'apiKey' ? 'password' : 'text'}" id="cfg-${svc.key}-${f}" style="width:100%;margin-bottom:6px" placeholder="${FIELD_LABELS[f]}">
         `).join('')}
-        <button class="btn bsm" style="margin-top:4px" onclick="saveServiceConfig('${svc.key}')">Save</button>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
+          <button class="btn bsm" onclick="saveServiceConfig('${svc.key}')">Save</button>
+          ${['zoho_mail','gmail','outlook'].includes(svc.key) ? `<button class="btn bsm bo" onclick="connectServiceEmail('${svc.key}')">Connect / authorise</button>` : ''}
+        </div>
       </div>
     </div>`;
   });
@@ -49,6 +53,28 @@ async function render_settings() {
   el.innerHTML = html;
 
   SERVICES.forEach(svc => loadServiceConfig(svc.key));
+}
+
+async function connectServiceEmail(key) {
+  await saveServiceConfig(key);
+  try {
+    const data = await apiGet('/email/connect/' + key);
+    if (!data?.url) { ntf('Failed to get authorization URL'); return; }
+    const popup = window.open(data.url, 'email_auth', 'width=600,height=700,scrollbars=yes');
+    window.addEventListener('message', function handler(e) {
+      if (e.data?.type === 'email-auth') {
+        window.removeEventListener('message', handler);
+        if (e.data.success) {
+          ntf(e.data.message || 'Connected!');
+          loadServiceConfig(key);
+        } else {
+          ntf(e.data.message || 'Connection failed');
+        }
+      }
+    });
+  } catch {
+    ntf('Failed to initiate connection');
+  }
 }
 
 async function loadServiceConfig(key) {
