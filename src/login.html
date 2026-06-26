@@ -81,7 +81,7 @@ async function doLogin() {
     }
     const result = await window.techsinno.authLogin(username, password);
     if (result && result.success) {
-      window.location.href = '../web/app.html';
+      window.location.href = 'index.html';
     } else {
       err.textContent = (result && result.error) || 'Login failed';
       btn.disabled = false;
