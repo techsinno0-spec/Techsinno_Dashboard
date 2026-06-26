@@ -1674,9 +1674,14 @@ function detectPriority(subject) {
 }
 async function addFollowUpReminder(subject, to, days) {
   const due = new Date(Date.now() + days*86400000).toISOString().split('T')[0];
-  const list = (await window.techsinno.storeGet('reminders')) || [];
-  list.push({ id: Date.now(), text: `Follow up: ${subject}`, to, due, done: false });
-  await window.techsinno.storeSet('reminders', list);
+  const title = `Follow up: ${subject}`;
+  const r = await window.techsinno.apiCall('POST', '/reminders', {
+    title,
+    description: to ? `Recipient: ${to}` : '',
+    dueDate: due,
+    priority: 'medium'
+  });
+  if (r && r.error) { ntf('Reminder was not saved to cloud: '+r.error); return; }
   ntf(`Follow-up reminder set for ${due}`);
 }
 function renderMailRows(messages, mode, provider) {
@@ -1890,10 +1895,19 @@ async function liConn(){await liSave();ntf('Opening LinkedIn auth…');const r=a
 async function liDisc(){await window.techsinno.liDisconnect();ntf('LinkedIn disconnected');rLiComm();}
 
 // ── Templates ──
-function getTpls(){return JSON.parse(localStorage.getItem('ts_tpl')||'[]');}
-function saveTpls(t){localStorage.setItem('ts_tpl',JSON.stringify(t));}
-function rTpls(){
-  const t=getTpls();const el=document.getElementById('tplView');
+let _quickTpls=[];
+async function getTpls(){
+  try {
+    const data=await window.techsinno.apiCall('GET','/templates');
+    _quickTpls=(data&&data.templates)||[];
+    return _quickTpls;
+  } catch {
+    _quickTpls=JSON.parse(localStorage.getItem('ts_tpl')||'[]');
+    return _quickTpls;
+  }
+}
+async function rTpls(){
+  const t=await getTpls();const el=document.getElementById('tplView');
   if(!t.length){el.innerHTML='<div style="color:var(--text3);font-size:12px">No templates yet. Click "+ New" to create one.</div>';return;}
   el.innerHTML=t.map((tp,i)=>`<div class="ir" style="align-items:flex-start;gap:8px">
     <div style="flex:1;min-width:0">
@@ -1905,21 +1919,25 @@ function rTpls(){
     <span onclick="rmTpl(${i})" style="color:var(--text3);cursor:pointer;font-size:16px;padding:0 3px;line-height:1.4">×</span>
   </div>`).join('');
 }
-function newTpl(){
+async function newTpl(){
   const name=prompt('Template name:');if(!name)return;
   const subject=prompt('Subject line:');if(subject===null)return;
   const body=prompt('Message body:');if(body===null)return;
-  const t=getTpls();t.push({name,subject,body});saveTpls(t);rTpls();ntf('Template saved');
+  const r=await window.techsinno.apiCall('POST','/templates',{name,subject,body,category:'custom'});
+  if(r&&r.error){ntf('Template save failed: '+r.error);return;}
+  await rTpls();ntf('Template saved');
 }
-function editTpl(i){
-  const t=getTpls();const tp=t[i];
+async function editTpl(i){
+  const t=_quickTpls;const tp=t[i];
   const name=prompt('Template name:',tp.name);if(!name)return;
   const subject=prompt('Subject:',tp.subject);if(subject===null)return;
   const body=prompt('Body:',tp.body);if(body===null)return;
-  t[i]={name,subject,body};saveTpls(t);rTpls();ntf('Template updated');
+  const r=await window.techsinno.apiCall('PUT','/templates/'+tp.id,{name,subject,body,category:tp.category||'custom'});
+  if(r&&r.error){ntf('Template update failed: '+r.error);return;}
+  await rTpls();ntf('Template updated');
 }
-function rmTpl(i){const t=getTpls();t.splice(i,1);saveTpls(t);rTpls();}
-function useTpl(i,provider){const tp=getTpls()[i];openCModal('',tp.subject,tp.body,provider);}
+async function rmTpl(i){const tp=_quickTpls[i];if(!tp)return;await window.techsinno.apiCall('DELETE','/templates/'+tp.id);await rTpls();}
+function useTpl(i,provider){const tp=_quickTpls[i];if(tp)openCModal('',tp.subject,tp.body,provider);}
 
 // ── Compose modal ──
 let _cmProvider='gmail';
@@ -2421,7 +2439,8 @@ async function addManualTask() {
     priority: document.getElementById('mtPriority')?.value || 'medium',
     status: 'pending'
   };
-  await window.techsinno.manualTasksUpsert(task);
+  const saved = await window.techsinno.manualTasksUpsert(task);
+  if (saved && saved.error) { ntf(saved.error); return; }
   _manualTasks = await window.techsinno.manualTasksGet();
   const el = document.getElementById('agentTabContent');
   if (el) el.innerHTML = renderMyTasksHtml();
@@ -2431,14 +2450,16 @@ async function addManualTask() {
 async function toggleTaskDone(id, done) {
   const task = _manualTasks.find(t => t.id === id);
   if (!task) return;
-  await window.techsinno.manualTasksUpsert({ ...task, status: done ? 'done' : 'pending' });
+  const saved = await window.techsinno.manualTasksUpsert({ ...task, status: done ? 'done' : 'pending' });
+  if (saved && saved.error) { ntf(saved.error); return; }
   _manualTasks = await window.techsinno.manualTasksGet();
   const el = document.getElementById('agentTabContent');
   if (el) el.innerHTML = renderMyTasksHtml();
 }
 
 async function deleteManualTask(id) {
-  await window.techsinno.manualTasksDelete(id);
+  const deleted = await window.techsinno.manualTasksDelete(id);
+  if (deleted && deleted.error) { ntf(deleted.error); return; }
   _manualTasks = _manualTasks.filter(t => t.id !== id);
   const el = document.getElementById('agentTabContent');
   if (el) el.innerHTML = renderMyTasksHtml();
@@ -2595,7 +2616,8 @@ async function createJobCard(docId, docType) {
 
 async function deleteJobCard(id) {
   if (!confirm('Delete this job card?')) return;
-  await window.techsinno.jobCardDelete(id);
+  const deleted = await window.techsinno.jobCardDelete(id);
+  if (deleted && deleted.error) { ntf(deleted.error); return; }
   _jobCards = _jobCards.filter(c => c.id !== id);
   if (_expandedCard === id) _expandedCard = null;
   const el = document.getElementById('agentTabContent');

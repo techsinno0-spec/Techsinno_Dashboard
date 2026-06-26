@@ -1,6 +1,8 @@
 let webAgentQueue = [];
 let webAgentLastScan = null;
 let webAgentTab = 0;
+let webManualTasks = [];
+let webAgentJobCards = [];
 
 const webAgentTypeLabel = { email_reply:'Lead reply', cold_email:'Cold email', quote_draft:'Quote draft', linkedin_post:'LinkedIn post', opportunity:'Opportunity', task_reminder:'Task reminder' };
 const webAgentTypeIcon  = { email_reply:'ti-mail', cold_email:'ti-send', quote_draft:'ti-file-invoice', linkedin_post:'ti-brand-linkedin', opportunity:'ti-briefcase', task_reminder:'ti-bell' };
@@ -82,8 +84,8 @@ function webAgentRenderTab() {
   else if (webAgentTab === 1) el.innerHTML = webAgentRenderOpportunities();
   else if (webAgentTab === 2) el.innerHTML = webAgentRenderHistory();
   else if (webAgentTab === 3) el.innerHTML = webAgentRenderWebsiteJobs();
-  else if (webAgentTab === 4) el.innerHTML = '<div class="card"><div style="font-size:12px;color:var(--text2)">My Tasks are available from the Weekly tasks / Team Tasks pages.</div></div>';
-  else el.innerHTML = '<div class="card"><div style="font-size:12px;color:var(--text2)">Job Cards are available from the Job Tasks page.</div></div>';
+  else if (webAgentTab === 4) { el.innerHTML = '<div class="card"><div class="spin"></div> Loading tasks...</div>'; webAgentRenderMyTasks(el); }
+  else { el.innerHTML = '<div class="card"><div class="spin"></div> Loading job cards...</div>'; webAgentRenderJobCards(el); }
 }
 
 function webAgentRenderPending() {
@@ -144,6 +146,123 @@ function webAgentRenderWebsiteJobs() {
   const jobs = webAgentQueue.filter(i => i.source === 'website_match' && i.status !== 'dismissed');
   if (!jobs.length) return '<div class="card" style="text-align:center;padding:30px;color:var(--text2)">No website-matched jobs yet.</div>';
   return jobs.map(webAgentRenderItem).join('');
+}
+
+async function webAgentLoadManualTasks() {
+  const state = await syncLoad();
+  webManualTasks = (state && state.data && Array.isArray(state.data.manualTasks)) ? state.data.manualTasks : [];
+  return state && state.data ? state.data : {};
+}
+
+async function webAgentSaveManualTasks() {
+  const saved = await syncSave({ manualTasks: webManualTasks });
+  if (!saved || saved.error || saved.success === false) throw new Error(saved && saved.error ? saved.error : 'Cloud sync failed');
+}
+
+async function webAgentRenderMyTasks(el) {
+  try {
+    await webAgentLoadManualTasks();
+    el.innerHTML = webAgentMyTasksHtml();
+  } catch {
+    el.innerHTML = '<div class="card" style="color:#f85149;font-size:12px">Failed to load shared tasks.</div>';
+  }
+}
+
+function webAgentMyTasksHtml() {
+  const rows = webManualTasks.length ? webManualTasks.map(t => {
+    const done = t.status === 'done';
+    const due = t.deadline ? new Date(t.deadline + (t.time ? 'T' + t.time : 'T00:00')) : null;
+    const overdue = due && due.getTime() < Date.now() && !done;
+    return `<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 11px;background:var(--bg3);border:1px solid ${overdue ? 'rgba(248,81,73,.4)' : 'var(--border)'};border-radius:var(--radius);margin-bottom:6px;opacity:${done ? '.55' : '1'}">
+      <input type="checkbox" ${done ? 'checked' : ''} onchange="webAgentToggleManualTask('${t.id}',this.checked)" style="width:15px;height:15px;flex-shrink:0;cursor:pointer;margin-top:2px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:500;color:var(--text);text-decoration:${done ? 'line-through' : 'none'}">${escHtml(t.title || '')}</div>
+        ${t.description ? `<div style="font-size:11px;color:var(--text3);margin-top:2px">${escHtml(t.description)}</div>` : ''}
+        <div style="font-size:10px;color:${overdue ? '#f85149' : 'var(--text3)'};font-family:'DM Mono',monospace;margin-top:4px">${overdue ? 'OVERDUE · ' : ''}${t.deadline || 'No deadline'}${t.time ? ' · ' + t.time : ''} · ${escHtml(t.priority || 'medium')}</div>
+      </div>
+      <button class="btn bo bsm" onclick="webAgentDeleteManualTask('${t.id}')">Delete</button>
+    </div>`;
+  }).join('') : '<div style="font-size:12px;color:var(--text3);text-align:center;padding:18px">No tasks yet — add one below.</div>';
+
+  return `<div class="card" style="margin-bottom:12px">
+    <div style="font-size:12px;font-weight:500;color:var(--text);margin-bottom:10px"><i class="ti ti-plus"></i> Add shared task</div>
+    <div style="display:grid;grid-template-columns:1fr 150px 150px 130px;gap:8px;margin-bottom:8px">
+      <input id="webMtTitle" type="text" placeholder="Task title *" style="font-size:12px">
+      <input id="webMtDeadline" type="date" style="font-size:12px">
+      <input id="webMtTime" type="time" style="font-size:12px">
+      <select id="webMtPriority" style="font-size:12px"><option value="high">High</option><option value="medium" selected>Medium</option><option value="low">Low</option></select>
+    </div>
+    <textarea id="webMtDesc" placeholder="Description / notes (optional)" style="width:100%;font-size:12px;min-height:52px;resize:vertical;margin-bottom:8px;box-sizing:border-box"></textarea>
+    <div style="text-align:right"><button class="btn bsm" onclick="webAgentAddManualTask()"><i class="ti ti-plus"></i> Add task</button></div>
+  </div>${rows}`;
+}
+
+async function webAgentAddManualTask() {
+  const title = document.getElementById('webMtTitle')?.value.trim();
+  if (!title) return ntf('Task title is required');
+  const previous = [...webManualTasks];
+  webManualTasks.unshift({
+    id: 'mt_' + Date.now().toString(36),
+    title,
+    description: document.getElementById('webMtDesc')?.value.trim() || '',
+    deadline: document.getElementById('webMtDeadline')?.value || '',
+    time: document.getElementById('webMtTime')?.value || '',
+    priority: document.getElementById('webMtPriority')?.value || 'medium',
+    status: 'pending',
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  });
+  try { await webAgentSaveManualTasks(); }
+  catch(e) { webManualTasks = previous; ntf('Task was not saved to cloud'); return; }
+  webAgentRenderTab();
+  ntf('Task added');
+}
+
+async function webAgentToggleManualTask(id, done) {
+  const previous = [...webManualTasks];
+  webManualTasks = webManualTasks.map(t => t.id === id ? { ...t, status: done ? 'done' : 'pending', updatedAt: Date.now() } : t);
+  try { await webAgentSaveManualTasks(); }
+  catch(e) { webManualTasks = previous; ntf('Task was not saved to cloud'); return; }
+  webAgentRenderTab();
+}
+
+async function webAgentDeleteManualTask(id) {
+  const previous = [...webManualTasks];
+  webManualTasks = webManualTasks.filter(t => t.id !== id);
+  try { await webAgentSaveManualTasks(); }
+  catch(e) { webManualTasks = previous; ntf('Task was not deleted from cloud'); return; }
+  webAgentRenderTab();
+  ntf('Task deleted');
+}
+
+async function webAgentRenderJobCards(el) {
+  try {
+    const data = await apiGet('/job-cards');
+    webAgentJobCards = (data && data.jobCards) || [];
+    if (!webAgentJobCards.length) {
+      el.innerHTML = '<div class="card" style="text-align:center;padding:30px;color:var(--text2)">No job cards yet.</div>';
+      return;
+    }
+    el.innerHTML = webAgentJobCards.map(c => `<div class="card" style="margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text)">${escHtml(c.title || c.jobTitle || '(untitled)')}</div>
+          <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-top:3px">${escHtml(c.jobNumber || c.docNumber || '')} · ${escHtml(c.clientName || c.client || 'Unknown client')} · ${escHtml(c.status || 'open')}</div>
+          ${(c.description || c.summary) ? `<div style="font-size:11px;color:var(--text2);line-height:1.5;margin-top:7px">${escHtml(c.description || c.summary)}</div>` : ''}
+        </div>
+        <button class="btn bo bsm" onclick="webAgentDeleteJobCard('${c.id}')">Delete</button>
+      </div>
+    </div>`).join('');
+  } catch {
+    el.innerHTML = '<div class="card" style="color:#f85149;font-size:12px">Failed to load job cards.</div>';
+  }
+}
+
+async function webAgentDeleteJobCard(id) {
+  if (!confirm('Delete this job card?')) return;
+  await apiDelete('/job-cards/' + id);
+  webAgentRenderTab();
+  ntf('Job card deleted');
 }
 
 async function webAgentDismiss(id) {

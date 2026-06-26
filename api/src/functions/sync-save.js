@@ -9,6 +9,10 @@ function cleanArray(value) {
   return Array.isArray(value) ? value.slice(0, MAX_ARRAY_ITEMS) : [];
 }
 
+function cleanObject(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+
 app.http('sync-save', {
   methods: ['PUT'],
   authLevel: 'anonymous',
@@ -23,10 +27,16 @@ app.http('sync-save', {
       if (!body || typeof body !== 'object') return badRequest('Sync payload is required');
 
       const now = new Date().toISOString();
+      let existing = null;
+      try { existing = await getItem('config', SYNC_ID); } catch {}
+      const previous = cleanObject(existing && existing.data);
       const data = {
-        tasks: cleanArray(body.tasks),
-        goals: cleanArray(body.goals),
-        posts: cleanArray(body.posts),
+        ...previous,
+        tasks: body.tasks === undefined ? cleanArray(previous.tasks) : cleanArray(body.tasks),
+        goals: body.goals === undefined ? cleanArray(previous.goals) : cleanArray(body.goals),
+        posts: body.posts === undefined ? cleanArray(previous.posts) : cleanArray(body.posts),
+        manualTasks: body.manualTasks === undefined ? cleanArray(previous.manualTasks) : cleanArray(body.manualTasks),
+        websiteServices: body.websiteServices === undefined ? cleanObject(previous.websiteServices) : cleanObject(body.websiteServices),
         savedAt: body.savedAt || now
       };
 
@@ -38,9 +48,6 @@ app.http('sync-save', {
         savedBy: decoded.sub,
         updatedAt: now
       };
-
-      let existing = null;
-      try { existing = await getItem('config', SYNC_ID); } catch {}
 
       if (existing) {
         await replaceItem('config', SYNC_ID, { ...existing, ...item });

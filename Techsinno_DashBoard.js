@@ -531,6 +531,38 @@ ipcMain.handle('sync-load', async () => {
   }
 });
 
+async function cloudApi(method, apiPath, body) {
+  const apiBase = getApiBase();
+  if (!apiBase) throw new Error('API URL not configured');
+  await ensureElectronToken();
+  const token = store.get('auth_token');
+  if (!token) throw new Error('Not logged in');
+  const config = {
+    method,
+    url: `${apiBase}/api${apiPath}`,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'X-Techsinno-Token': token
+    }
+  };
+  if (body && (method === 'POST' || method === 'PUT')) {
+    config.data = body;
+    config.headers['Content-Type'] = 'application/json';
+  }
+  const res = await axios(config);
+  return res.data;
+}
+
+async function cloudSyncLoadData() {
+  const res = await cloudApi('GET', '/sync');
+  return (res && res.success && res.data) ? res.data : {};
+}
+
+async function cloudSyncSavePatch(patch) {
+  const res = await cloudApi('PUT', '/sync', { ...patch, savedAt: new Date().toISOString() });
+  return res;
+}
+
 // ─── OPEN EXTERNAL URL ────────────────────────────────────────────────────────
 
 ipcMain.handle('open-url', (_, u) => { shell.openExternal(u); return true; });
@@ -1982,7 +2014,11 @@ Return ONLY valid JSON array:
     } catch(e) { errors.push('Cold emails: '+e.message); }
 
     // 5 — Enhance Upwork queries using website services if available
-    const wsServices = store.get('website_services', {});
+    let wsServices = store.get('website_services', {});
+    try {
+      const cloud = await cloudSyncLoadData();
+      if (cloud.websiteServices && Object.keys(cloud.websiteServices).length) wsServices = cloud.websiteServices;
+    } catch {}
     if (wsServices.services && wsServices.services.length) {
       try {
         const extraQuery = wsServices.services.slice(0, 3).join(' OR ') + ' South Africa';
@@ -2001,7 +2037,11 @@ Return ONLY valid JSON array:
     }
 
     // 6 — Manual task reminders
-    const manualTasks = store.get('manual_tasks', []);
+    let manualTasks = store.get('manual_tasks', []);
+    try {
+      const cloud = await cloudSyncLoadData();
+      if (Array.isArray(cloud.manualTasks)) manualTasks = cloud.manualTasks;
+    } catch {}
     const now2 = Date.now();
     const threeDays = 3 * 24 * 60 * 60 * 1000;
     manualTasks.filter(t => t.status !== 'done' && t.deadline).forEach(task => {
@@ -2170,6 +2210,7 @@ Content: ${text}` }]
     const m = (r.content[0]?.text || '{}').trim().match(/\{[\s\S]*\}/);
     const parsed = m ? JSON.parse(m[0]) : {};
     store.set('website_services', parsed);
+    try { await cloudSyncSavePatch({ websiteServices: parsed }); } catch {}
     return { success: true, ...parsed, text: text.slice(0, 500) };
   } catch(e) { return { error: e.message }; }
 });
@@ -2185,20 +2226,50 @@ ipcMain.handle('agent-reset', async () => {
 
 // ─── MANUAL TASKS ────────────────────────────────────────────────────────────
 
-ipcMain.handle('manual-tasks-get', () => store.get('manual_tasks', []));
-
-ipcMain.handle('manual-tasks-upsert', (_, task) => {
-  const tasks = store.get('manual_tasks', []);
-  const idx = tasks.findIndex(t => t.id === task.id);
-  if (idx >= 0) tasks[idx] = task;
-  else tasks.unshift({ ...task, id: uid(), createdAt: Date.now() });
-  store.set('manual_tasks', tasks);
-  return true;
+ipcMain.handle('manual-tasks-get', async () => {
+  try {
+    const cloud = await cloudSyncLoadData();
+    const tasks = Array.isArray(cloud.manualTasks) ? cloud.manualTasks : [];
+    store.set('manual_tasks', tasks);
+    return tasks;
+  } catch {
+    return store.get('manual_tasks', []);
+  }
 });
 
-ipcMain.handle('manual-tasks-delete', (_, id) => {
-  store.set('manual_tasks', store.get('manual_tasks', []).filter(t => t.id !== id));
-  return true;
+ipcMain.handle('manual-tasks-upsert', async (_, task) => {
+  let tasks = store.get('manual_tasks', []);
+  try {
+    const cloud = await cloudSyncLoadData();
+    if (Array.isArray(cloud.manualTasks)) tasks = cloud.manualTasks;
+  } catch {}
+  const idx = tasks.findIndex(t => t.id === task.id);
+  const now = Date.now();
+  if (idx >= 0) tasks[idx] = { ...tasks[idx], ...task, updatedAt: now };
+  else tasks.unshift({ ...task, id: uid(), createdAt: now, updatedAt: now });
+  try {
+    await cloudSyncSavePatch({ manualTasks: tasks });
+  } catch (e) {
+    return { error: 'Cloud sync failed. Task was not saved.', detail: e.message };
+  }
+  store.set('manual_tasks', tasks);
+  return { success: true, tasks };
+});
+
+ipcMain.handle('manual-tasks-delete', async (_, id) => {
+  let tasks = store.get('manual_tasks', []);
+  try {
+    const cloud = await cloudSyncLoadData();
+    if (Array.isArray(cloud.manualTasks)) tasks = cloud.manualTasks;
+  } catch {}
+  tasks = tasks.filter(t => t.id !== id);
+  try {
+    await cloudSyncSavePatch({ manualTasks: tasks });
+  } catch (e) {
+    return { error: 'Cloud sync failed. Task was not deleted.', detail: e.message };
+  }
+  store.set('manual_tasks', tasks);
+  return { success: true, tasks };
 });
 
 // ─── ZOHO JOB CARDS ──────────────────────────────────────────────────────────
@@ -2279,16 +2350,36 @@ SA suppliers: RS Components SA (rsonline.co.za), Micro Robotics (robotics.org.za
       docTotal: doc.total || 0, lineItems, ...jobData,
       createdAt: Date.now(), status: 'active'
     };
-    const cards = store.get('job_cards', []);
-    cards.unshift(card);
-    store.set('job_cards', cards);
-    return { success: true, card };
+    try {
+      const cloud = await cloudApi('POST', '/job-cards', { generatedCard: true, card });
+      const cloudCard = cloud.jobCard || cloud.card || card;
+      const cards = store.get('job_cards', []).filter(c => c.id !== cloudCard.id);
+      cards.unshift(cloudCard);
+      store.set('job_cards', cards);
+      return { success: true, card: cloudCard };
+    } catch(e) {
+      return { error: 'Cloud job-card sync failed. Job card was not saved: ' + e.message };
+    }
   } catch(e) { return { error: e.message }; }
 });
 
-ipcMain.handle('job-cards-get', () => ({ cards: store.get('job_cards', []) }));
+ipcMain.handle('job-cards-get', async () => {
+  try {
+    const data = await cloudApi('GET', '/job-cards');
+    const cards = data.jobCards || data.cards || [];
+    store.set('job_cards', cards);
+    return { cards };
+  } catch {
+    return { cards: store.get('job_cards', []) };
+  }
+});
 
-ipcMain.handle('job-card-delete', (_, id) => {
+ipcMain.handle('job-card-delete', async (_, id) => {
+  try {
+    await cloudApi('DELETE', `/job-cards/${encodeURIComponent(id)}`);
+  } catch(e) {
+    return { error: 'Cloud job-card sync failed. Job card was not deleted: ' + e.message };
+  }
   store.set('job_cards', store.get('job_cards', []).filter(c => c.id !== id));
   return true;
 });
