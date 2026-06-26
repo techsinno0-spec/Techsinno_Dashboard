@@ -1731,11 +1731,31 @@ async function fetchUpworkRSS() {
   return results;
 }
 
-ipcMain.handle('agent-get-queue', () => ({
-  queue: store.get('agent_queue', []),
-  lastScan: store.get('agent_last_scan', null),
-  opportunities: store.get('agent_opportunities', [])
-}));
+ipcMain.handle('agent-get-queue', async () => {
+  try {
+    const apiBase = getApiBase();
+    if (apiBase && store.get('auth_token')) {
+      await ensureElectronToken();
+      const token = store.get('auth_token');
+      const res = await axios.get(`${apiBase}/api/agent/queue`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'X-Techsinno-Token': token
+        },
+        timeout: 15000
+      });
+      if (res.data && res.data.success) {
+        store.set('agent_queue', res.data.queue || []);
+        store.set('agent_last_scan', res.data.lastScan || null);
+      }
+    }
+  } catch {}
+  return {
+    queue: store.get('agent_queue', []),
+    lastScan: store.get('agent_last_scan', null),
+    opportunities: store.get('agent_opportunities', [])
+  };
+});
 
 async function agentCloudSaveQueue() {
   try {

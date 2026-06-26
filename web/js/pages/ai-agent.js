@@ -15,7 +15,7 @@ async function render_agent() {
       <div style="font-size:12px;color:var(--text2);margin-top:2px">Claude scans your emails and platforms, prepares everything — you just approve</div>
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
-      <button class="btn" style="display:flex;align-items:center;gap:6px" onclick="webAgentDesktopScanNotice()"><i class="ti ti-refresh"></i> Run full scan</button>
+      <button class="btn" id="webAgentScanBtn" style="display:flex;align-items:center;gap:6px" onclick="webAgentRunScan()"><i class="ti ti-refresh"></i> Run full scan</button>
       <button class="btn bo bsm" style="color:#f85149;border-color:rgba(248,81,73,.3)" onclick="webAgentReset()" title="Clear cloud queue"><i class="ti ti-trash"></i> Reset all</button>
     </div>
   </div>
@@ -169,6 +169,17 @@ function webAgentCopy(id) {
   ntf('Copied');
 }
 
-function webAgentDesktopScanNotice() {
-  ntf('Run full scan from the Electron manager app; web shows the shared queue.');
+async function webAgentRunScan() {
+  const btn = document.getElementById('webAgentScanBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spin" style="width:12px;height:12px;border-width:2px"></div> Scanning...'; }
+  ntf('Cloud AI scan started...');
+  try {
+    const data = await apiPost('/agent/scan', {});
+    if (data && data.error) ntf(data.error);
+    else ntf(`Scan complete · ${data.newItems || 0} new item(s)`);
+    await webAgentLoadQueue();
+  } catch {
+    ntf('Cloud scan failed');
+  }
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-refresh"></i> Run full scan'; }
 }
