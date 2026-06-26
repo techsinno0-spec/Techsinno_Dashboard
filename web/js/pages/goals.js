@@ -13,14 +13,44 @@ async function render_goals() {
 }
 
 let goalsData = [];
+let syncState = null;
+
+function normalizeGoal(g, idx) {
+  return {
+    title: g.title || g.t || `Goal ${idx + 1}`,
+    description: g.description || '',
+    deadline: g.deadline || null,
+    progress: g.progress !== undefined ? g.progress : (g.d ? 100 : 0),
+    phase: g.phase || g.p || 1,
+    done: g.done !== undefined ? g.done : !!g.d,
+    raw: g
+  };
+}
+
+function toElectronGoal(g) {
+  return {
+    ...g.raw,
+    t: g.title,
+    p: Number(g.phase || g.raw?.p || 1),
+    d: Number(g.progress || 0) >= 100,
+    title: g.title,
+    description: g.description,
+    deadline: g.deadline,
+    progress: Number(g.progress || 0)
+  };
+}
 
 async function loadGoals() {
   const container = document.getElementById('goalsContainer');
   if (!container) return;
 
   try {
-    const data = await apiGet('/config/goals_private');
-    goalsData = (data && data.config && data.config.goals) || [];
+    syncState = await syncLoad();
+    goalsData = ((syncState && syncState.data && syncState.data.goals) || []).map(normalizeGoal);
+    if (!goalsData.length) {
+      const data = await apiGet('/config/goals_private');
+      goalsData = ((data && data.config && data.config.goals) || []).map(normalizeGoal);
+    }
   } catch {
     goalsData = [];
   }
@@ -74,6 +104,8 @@ async function submitGoal() {
     description: document.getElementById('goalDesc').value.trim(),
     deadline: document.getElementById('goalDeadline').value || null,
     progress: 0,
+    phase: 1,
+    done: false,
     createdAt: new Date().toISOString()
   });
   await saveGoals();
@@ -98,6 +130,12 @@ async function deleteGoal(idx) {
 
 async function saveGoals() {
   try {
+    const current = syncState && syncState.data ? syncState.data : ((await syncLoad()).data || {});
+    await syncSave({
+      tasks: current.tasks || [],
+      posts: current.posts || [],
+      goals: goalsData.map(toElectronGoal)
+    });
     await apiPut('/config/goals_private', { goals: goalsData });
     loadGoals();
   } catch {

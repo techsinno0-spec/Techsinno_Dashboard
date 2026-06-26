@@ -704,7 +704,7 @@ const PD=[
   {w:4,d:'Wed',g:'repair',h:'3 questions to ask before you replace any industrial electronics.',tags:'#PCBRepair #IndustrialElectronics #Maintenance',s:'draft'},
   {w:4,d:'Fri',g:'auto',h:"I started TECHSINNO because SA's mid-size manufacturers deserve better.",tags:'#TECHSINNO #Mechatronics #WesternCape',s:'draft'}
 ];
-let ST={},cW=0,zD=null,curP=0;
+let ST={},cW=0,zD=null,curP=0,_lastSyncSavedAt=null,_syncPullTimer=null,_syncSaving=false;
 const TITLES=['Dashboard','Weekly tasks','90-day goals','Zoho Books','Social Media','All Inboxes','Reminders','Settings','Communications','AI Agent','Zoho Mail','Gmail','Outlook','Job Tasks','Team Tasks','Team Management','Staff Activity','Task Reports','CRM','Quotes','Templates','Marketing'];
 const SUBS=['TECHSINNO (Pty) Ltd · Reg: 2022/364165/07','Evenings & weekends · 8–12 hrs/week','Foundation → Traction → Scale','Live invoices · expenses · P&L','Post to LinkedIn, Facebook & Instagram','Zoho Mail · Gmail · Outlook — all in one place','Evening & weekend schedule','Zoho API · account details · Cloudflare','Zoho Mail · Gmail · Outlook · LinkedIn','Email leads · cold outreach · LinkedIn posts · Upwork · ready for approval','frank@techsinno.com — read · reply · compose · AI scan','techsinno0@gmail.com — read · reply · compose','techsinno0@outlook.com — read · reply · compose','Active jobs · deadlines · parts · AI job cards from Zoho','Assign & track team tasks','Manage staff accounts','Monitor team activity','Team performance & analytics','Client pipeline & lead tracking','Proposals & invoicing','Reusable email & outreach templates','Campaigns, analytics & outreach'];
 
@@ -717,6 +717,8 @@ async function lSt(){
       ST.t=cloud.data.tasks||WEEKS.map(w=>w.t.map(t=>({...t})));
       ST.g=cloud.data.goals||GD.map(g=>({...g,d:false}));
       ST.p=cloud.data.posts||PD.map(p=>({...p}));
+      _lastSyncSavedAt=cloud.savedAt||cloud.data.savedAt||null;
+      updSyncPill(cloud);
     } else {
       ST.t=await window.techsinno.storeGet('tasks')||WEEKS.map(w=>w.t.map(t=>({...t})));
       ST.g=await window.techsinno.storeGet('goals')||GD.map(g=>({...g,d:false}));
@@ -730,26 +732,55 @@ async function lSt(){
 }
 async function svSt(){
   if(isE){
+    _syncSaving=true;
     await window.techsinno.storeSet('tasks',ST.t);
     await window.techsinno.storeSet('goals',ST.g);
     await window.techsinno.storeSet('posts',ST.p);
     const r=await window.techsinno.syncSave({tasks:ST.t,goals:ST.g,posts:ST.p,savedAt:new Date().toISOString()});
+    if(r&&r.success)_lastSyncSavedAt=r.savedAt||r.ts||_lastSyncSavedAt;
     updSyncPill(r);
+    _syncSaving=false;
   } else {
     ss2('ts_t',ST.t);ss2('ts_g',ST.g);ss2('ts_p',ST.p);
   }
+}
+async function pullCloudSync(force=false){
+  if(!isE||_syncSaving||!window.techsinno||!window.techsinno.syncLoad)return;
+  try{
+    const cloud=await window.techsinno.syncLoad();
+    if(!cloud||!cloud.success||!cloud.data){if(cloud)updSyncPill(cloud);return;}
+    const savedAt=cloud.savedAt||cloud.data.savedAt||null;
+    if(!force&&savedAt&&_lastSyncSavedAt&&savedAt===_lastSyncSavedAt){updSyncPill(cloud);return;}
+    ST.t=cloud.data.tasks||ST.t;
+    ST.g=cloud.data.goals||ST.g;
+    ST.p=cloud.data.posts||ST.p;
+    _lastSyncSavedAt=savedAt;
+    await window.techsinno.storeSet('tasks',ST.t);
+    await window.techsinno.storeSet('goals',ST.g);
+    await window.techsinno.storeSet('posts',ST.p);
+    updSyncPill(cloud);
+    if(curP===0)rDash();
+    if(curP===1)rTasks();
+    if(curP===2)rGoals();
+    if(curP===4)rSocial();
+  }catch(e){}
+}
+function startCloudSync(){
+  if(!isE||_syncPullTimer)return;
+  _syncPullTimer=setInterval(()=>pullCloudSync(false),30000);
 }
 function updSyncPill(r){
   const el=document.getElementById('syncPill');
   if(!el)return;
   if(r&&r.success){
-    const t=new Date(r.ts);
+    const t=new Date(r.savedAt||r.ts||Date.now());
+    const src=r.source==='onedrive'?'OneDrive backup':'Cloud sync';
     el.textContent='☁ '+t.toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'});
-    el.title='Synced to OneDrive at '+t.toLocaleTimeString('en-ZA');
+    el.title=src+' at '+t.toLocaleTimeString('en-ZA');
     el.style.color='#3fb950';
   } else {
     el.textContent='☁ sync error';el.style.color='#f85149';
-    el.title=r&&r.error?r.error:'OneDrive sync failed';
+    el.title=r&&r.error?r.error:'Cloud sync failed';
   }
 }
 function dop(){const d=Math.floor((new Date()-START)/86400000)+1;return Math.max(1,Math.min(90,d));}
@@ -3030,6 +3061,13 @@ async function odDisc(){
 
 async function manualSync(){
   if(!isE)return;
+  const cloudEl=document.getElementById('syncPill');
+  if(cloudEl){cloudEl.textContent='☁ syncing...';cloudEl.style.color='var(--accent)';}
+  const cloudResult=await window.techsinno.syncSave({tasks:ST.t,goals:ST.g,posts:ST.p,savedAt:new Date().toISOString()});
+  if(cloudResult&&cloudResult.success)_lastSyncSavedAt=cloudResult.savedAt||cloudResult.ts||_lastSyncSavedAt;
+  updSyncPill(cloudResult);
+  if(cloudResult&&cloudResult.success)ntf(cloudResult.source==='onedrive'?'Synced to OneDrive backup':'Synced to cloud');else ntf('Sync failed: '+(cloudResult.error||'unknown'));
+  return;
   const info=await window.techsinno.syncGetInfo();
   const el=document.getElementById('syncPill');
   if(!info.connected){
@@ -4808,10 +4846,10 @@ async function init(){
   if (isManager()) await loadTeamUsers();
   await lSt();updDay();rDash();
   if(isE){
-    const info=await window.techsinno.syncGetInfo();
     const el=document.getElementById('syncPill');
-    if(el){el.title='Sync to: '+info.path+'\nClick to sync now';}
+    if(el){el.title='Cloud sync active\nClick to sync now';}
     await manualSync();
+    startCloudSync();
   }
   if(isE&&isManager()){
     const cfg=await window.techsinno.getZohoConfig();

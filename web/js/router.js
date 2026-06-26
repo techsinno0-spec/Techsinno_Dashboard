@@ -1,29 +1,34 @@
 const NAV_CONFIG = [
   { section: 'Overview' },
   { id: 'dashboard', icon: 'ti-layout-dashboard', label: 'Dashboard', roles: ['manager', 'staff'] },
-  { id: 'tasks', icon: 'ti-checklist', label: 'My Tasks', roles: ['manager', 'staff'] },
-  { section: 'Operations' },
-  { id: 'job-cards', icon: 'ti-clipboard-list', label: 'Job Cards', roles: ['manager', 'staff'] },
-  { id: 'projects', icon: 'ti-layout-kanban', label: 'Projects', roles: ['manager', 'staff'] },
+  { id: 'tasks', icon: 'ti-checklist', label: 'Weekly tasks', roles: ['manager', 'staff'] },
   { section: 'Business', roles: ['manager'] },
-  { id: 'crm', icon: 'ti-address-book', label: 'CRM', roles: ['manager'] },
-  { id: 'quotes', icon: 'ti-file-invoice', label: 'Quotes', roles: ['manager'] },
-  { id: 'goals', icon: 'ti-target', label: '90-Day Goals', roles: ['manager'] },
+  { id: 'goals', icon: 'ti-target', label: '90-day goals', roles: ['manager'] },
   { id: 'zoho', icon: 'ti-chart-bar', label: 'Zoho Books', roles: ['manager'] },
   { id: 'social', icon: 'ti-share', label: 'Social Media', roles: ['manager'] },
-  { id: 'marketing', icon: 'ti-speakerphone', label: 'Marketing', roles: ['manager'] },
   { id: 'inboxes', icon: 'ti-inbox', label: 'All Inboxes', roles: ['manager'] },
   { section: 'Admin' },
   { id: 'reminders', icon: 'ti-bell', label: 'Reminders', roles: ['manager', 'staff'] },
-  { id: 'templates', icon: 'ti-template', label: 'Templates', roles: ['manager'] },
   { id: 'settings', icon: 'ti-settings', label: 'Settings', roles: ['manager'] },
   { id: 'communications', icon: 'ti-messages', label: 'Communications', roles: ['manager'] },
-  { section: 'Tools' },
+  { section: 'Automation' },
   { id: 'agent', icon: 'ti-robot', label: 'AI Agent', roles: ['manager', 'staff'] },
+  { section: 'Mail', roles: ['manager'] },
+  { id: 'mail-zoho', target: 'communications', icon: 'ti-mail', label: 'Zoho Mail', roles: ['manager'] },
+  { id: 'mail-gmail', target: 'inboxes', icon: 'ti-brand-gmail', label: 'Gmail', roles: ['manager'] },
+  { id: 'mail-outlook', target: 'inboxes', icon: 'ti-mail', label: 'Outlook', roles: ['manager'] },
+  { section: 'Production' },
+  { id: 'job-cards', icon: 'ti-tool', label: 'Job Tasks', roles: ['manager', 'staff'] },
   { section: 'Team', roles: ['manager'] },
-  { id: 'team', icon: 'ti-users', label: 'Team', roles: ['manager'] },
+  { id: 'projects', icon: 'ti-layout-kanban', label: 'Team Tasks', roles: ['manager', 'staff'] },
+  { id: 'team', icon: 'ti-users', label: 'Team Mgmt', roles: ['manager'] },
   { id: 'staff-activity', icon: 'ti-activity', label: 'Staff Activity', roles: ['manager'] },
   { id: 'task-reports', icon: 'ti-report-analytics', label: 'Task Reports', roles: ['manager'] },
+  { section: 'Manager Tools', roles: ['manager'] },
+  { id: 'crm', icon: 'ti-address-book', label: 'CRM', roles: ['manager'] },
+  { id: 'quotes', icon: 'ti-file-invoice', label: 'Quotes', roles: ['manager'] },
+  { id: 'templates', icon: 'ti-template', label: 'Templates', roles: ['manager'] },
+  { id: 'marketing', icon: 'ti-speakerphone', label: 'Marketing', roles: ['manager'] },
 ];
 
 let currentPage = 'dashboard';
@@ -43,11 +48,12 @@ function buildSidebar() {
       return;
     }
     if (!item.roles.includes(role)) return;
+    const targetPage = item.target || item.id;
     const el = document.createElement('div');
     el.className = 'nav-item' + (item.id === currentPage ? ' active' : '');
     el.dataset.page = item.id;
     el.innerHTML = `<i class="ti ${item.icon}"></i>${item.label}`;
-    el.addEventListener('click', () => navigateTo(item.id));
+    el.addEventListener('click', () => navigateTo(targetPage));
     nav.appendChild(el);
   });
 }
@@ -73,10 +79,10 @@ function navigateTo(pageId) {
   });
 
   const titles = {
-    'dashboard': ['Dashboard', 'Overview'],
-    'tasks': ['Tasks', isManager() ? 'Manage & assign tasks' : 'Your assigned tasks'],
-    'job-cards': ['Job Cards', isManager() ? 'Manage all job cards' : 'Your assigned job cards'],
-    'projects': ['Projects', isManager() ? 'All projects & phases' : 'Your assigned projects'],
+    'dashboard': ['Dashboard', 'TECHSINNO (Pty) Ltd · Reg: 2022/364165/07'],
+    'tasks': ['Weekly tasks', isManager() ? 'Evenings & weekends · 8–12 hrs/week' : 'Your assigned tasks'],
+    'job-cards': ['Job Tasks', isManager() ? 'Active jobs · deadlines · parts · AI job cards from Zoho' : 'Your assigned job cards'],
+    'projects': ['Team Tasks', isManager() ? 'Assign & track team tasks' : 'Your assigned projects'],
     'goals': ['90-Day Goals', 'Foundation → Traction → Scale'],
     'zoho': ['Zoho Books', 'Financial dashboard'],
     'crm': ['CRM', 'Client pipeline & lead tracking'],

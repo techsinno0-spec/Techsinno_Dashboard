@@ -87,6 +87,13 @@ async function initApp() {
   if (isManager()) await loadUsers();
 
   navigateTo('dashboard');
+
+  if (isManager()) {
+    setInterval(() => {
+      if (currentPage === 'dashboard') render_dashboard();
+      if (currentPage === 'goals') loadGoals();
+    }, 30000);
+  }
 }
 
 document.addEventListener('DOMContentLoaded', initApp);

@@ -48,3 +48,10 @@ function apiGet(path) { return apiCall('GET', path); }
 function apiPost(path, body) { return apiCall('POST', path, body); }
 function apiPut(path, body) { return apiCall('PUT', path, body); }
 function apiDelete(path) { return apiCall('DELETE', path); }
+async function syncLoad() {
+  const data = await apiGet('/sync');
+  return data && data.success ? data : { success: false, data: null };
+}
+async function syncSave(data) {
+  return apiPut('/sync', { ...data, savedAt: new Date().toISOString() });
+}

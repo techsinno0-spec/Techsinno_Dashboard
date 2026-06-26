@@ -470,26 +470,63 @@ ipcMain.handle('sync-get-info', () => ({
 
 ipcMain.handle('sync-save', async (_, data) => {
   try {
+    const apiBase = getApiBase();
+    if (apiBase && store.get('auth_token')) {
+      await ensureElectronToken();
+      const token = store.get('auth_token');
+      const res = await axios.put(`${apiBase}/api/sync`, data, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'X-Techsinno-Token': token,
+          'Content-Type': 'application/json'
+        },
+        timeout: 15000
+      });
+      if (res.data && res.data.success) return { ...res.data, source: 'cloud' };
+    }
+  } catch(e) {
+    // Fall through to the legacy OneDrive backup path.
+  }
+
+  try {
     const token = await odEnsureToken();
     await axios.put(
       `${OD_API_BASE}/me/drive/root:/${OD_FILE_PATH}:/content`,
       JSON.stringify(data, null, 2),
       { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
     );
-    return { success: true, ts: new Date().toISOString() };
+    return { success: true, ts: new Date().toISOString(), source: 'onedrive' };
   } catch(e) { return { error: e.message }; }
 });
 
 ipcMain.handle('sync-load', async () => {
+  try {
+    const apiBase = getApiBase();
+    if (apiBase && store.get('auth_token')) {
+      await ensureElectronToken();
+      const token = store.get('auth_token');
+      const res = await axios.get(`${apiBase}/api/sync`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'X-Techsinno-Token': token
+        },
+        timeout: 15000
+      });
+      if (res.data && res.data.success) return { ...res.data, source: 'cloud' };
+    }
+  } catch(e) {
+    // Fall through to the legacy OneDrive backup path.
+  }
+
   try {
     const token = await odEnsureToken();
     const res = await axios.get(
       `${OD_API_BASE}/me/drive/root:/${OD_FILE_PATH}:/content`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
-    return { success: true, data: res.data };
+    return { success: true, data: res.data, source: 'onedrive' };
   } catch(e) {
-    if (e.response && e.response.status === 404) return { success: true, data: null };
+    if (e.response && e.response.status === 404) return { success: true, data: null, source: 'onedrive' };
     return { error: e.message };
   }
 });
