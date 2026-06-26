@@ -2,10 +2,25 @@ let tasksFilter = 'all';
 let tasksDetailId = null;
 let _completionTask = null;
 let _allTasks = [];
+let weeklyPlanWeek = 0;
+
+const WEB_WEEK_DEFAULTS = [
+  { l: 'Week 1', t: [{ x: 'Open business bank account', g: 'admin', s: 'eve', d: false }, { x: 'Register on SARS eFiling', g: 'admin', s: 'eve', d: false }, { x: 'Update CIPC customer profile', g: 'admin', s: 'eve', d: false }] },
+  { l: 'Week 2', t: [{ x: 'Audit tools vs needs', g: 'repair', s: 'wknd', d: false }, { x: 'Order missing test equipment', g: 'repair', s: 'wknd', d: false }, { x: 'Set up workshop space', g: 'repair', s: 'wknd', d: false }] },
+  { l: 'Week 3', t: [{ x: 'Create LinkedIn company page', g: 'admin', s: 'eve', d: false }, { x: 'Build Linktree/Carrd website', g: 'admin', s: 'eve', d: false }, { x: 'Design service one-pager PDF', g: 'admin', s: 'eve', d: false }, { x: 'Send 5 LinkedIn connections', g: 'auto', s: 'eve', d: false }] },
+  { l: 'Week 4', t: [{ x: 'List 20 target businesses', g: 'repair', s: 'eve', d: false }, { x: 'Send 10 cold outreach emails', g: 'repair', s: 'eve', d: false }, { x: 'Follow up LinkedIn connections', g: 'admin', s: 'eve', d: false }, { x: 'Publish brand story post', g: 'admin', s: 'eve', d: false }] },
+  { l: 'Week 5-6', t: [{ x: 'Complete first repair job', g: 'repair', s: 'wknd', d: false }, { x: 'Write and publish case study', g: 'repair', s: 'eve', d: false }, { x: 'Ask client for referral', g: 'repair', s: 'eve', d: false }] },
+  { l: 'Week 7-8', t: [{ x: 'Identify 15 automation targets', g: 'auto', s: 'eve', d: false }, { x: 'Send free audit offer on LinkedIn', g: 'auto', s: 'eve', d: false }, { x: 'Set up Google Business Profile', g: 'admin', s: 'eve', d: false }] },
+  { l: 'Week 9-10', t: [{ x: 'Draft retainer proposal', g: 'auto', s: 'eve', d: false }, { x: 'Present retainer to best client', g: 'auto', s: 'wknd', d: false }, { x: 'Scope and price IoT pilot', g: 'iot', s: 'eve', d: false }] },
+  { l: 'Week 11-12', t: [{ x: 'IoT pilot site visit', g: 'iot', s: 'wknd', d: false }, { x: 'Review 90-day revenue vs targets', g: 'admin', s: 'eve', d: false }, { x: 'Write Q2 plan', g: 'admin', s: 'eve', d: false }] }
+];
 
 async function render_tasks() {
   const el = document.getElementById('page-tasks');
   const role = getUser().role;
+  if (role === 'manager') {
+    return renderWeeklyPlan();
+  }
 
   el.innerHTML = '<div class="spin"></div> Loading tasks...';
 
@@ -67,6 +82,84 @@ async function render_tasks() {
   } catch (err) {
     el.innerHTML = '<div class="empty-state"><i class="ti ti-alert-circle"></i>Failed to load tasks</div>';
   }
+}
+
+async function getWeeklySyncState() {
+  const state = await syncLoad();
+  const data = (state && state.data) || {};
+  if (!Array.isArray(data.tasks) || !data.tasks.length) data.tasks = WEB_WEEK_DEFAULTS.map(w => ({ ...w, t: w.t.map(t => ({ ...t })) }));
+  if (!Array.isArray(data.goals)) data.goals = [];
+  if (!Array.isArray(data.posts)) data.posts = [];
+  return data;
+}
+
+async function saveWeeklySyncState(data) {
+  await syncSave({
+    tasks: data.tasks || [],
+    goals: data.goals || [],
+    posts: data.posts || []
+  });
+}
+
+async function renderWeeklyPlan() {
+  const el = document.getElementById('page-tasks');
+  el.innerHTML = '<div class="spin"></div> Loading weekly plan...';
+  try {
+    const data = await getWeeklySyncState();
+    const weeks = data.tasks;
+    const week = weeks[weeklyPlanWeek] || weeks[0];
+    let html = `<div class="wtabs">
+      ${weeks.map((w, i) => `<button class="wtab ${i === weeklyPlanWeek ? 'active' : ''}" onclick="weeklyPlanWeek=${i};render_tasks()">${escHtml(w.l || ('Week ' + (i + 1)))}</button>`).join('')}
+    </div>
+    <div class="card">
+      ${(week.t || []).map((t, i) => `<div class="tr">
+        <input type="checkbox" ${t.d ? 'checked' : ''} onchange="toggleWeeklyTask(${weeklyPlanWeek},${i})">
+        <div style="flex:1;font-size:12px;color:var(--text);${t.d ? 'text-decoration:line-through;color:var(--text3)' : ''}">${escHtml(t.x || '')}</div>
+        <span class="tag ${t.g === 'repair' ? 't-r' : t.g === 'auto' ? 't-a' : t.g === 'iot' ? 't-i' : 't-ad'}">${escHtml(t.g || 'admin')}</span>
+        <span class="tag t-g">${t.s === 'wknd' ? 'Wknd' : 'Eve'}</span>
+        <button class="btn bsm bo" onclick="removeWeeklyTask(${weeklyPlanWeek},${i})">×</button>
+      </div>`).join('')}
+      <div style="display:flex;gap:6px;margin-top:10px">
+        <input id="weeklyTaskText" placeholder="Add a task..." style="flex:1">
+        <select id="weeklyTaskCat"><option value="admin">Admin</option><option value="repair">Repair</option><option value="auto">Automation</option><option value="iot">IoT</option></select>
+        <select id="weeklyTaskSlot"><option value="eve">Evening</option><option value="wknd">Weekend</option></select>
+        <button class="btn bsm" onclick="addWeeklyTask()">+ Add</button>
+      </div>
+    </div>`;
+    el.innerHTML = html;
+  } catch {
+    el.innerHTML = '<div class="empty-state"><i class="ti ti-alert-circle"></i>Failed to load weekly sync plan</div>';
+  }
+}
+
+async function toggleWeeklyTask(weekIdx, taskIdx) {
+  const data = await getWeeklySyncState();
+  data.tasks[weekIdx].t[taskIdx].d = !data.tasks[weekIdx].t[taskIdx].d;
+  await saveWeeklySyncState(data);
+  render_tasks();
+}
+
+async function removeWeeklyTask(weekIdx, taskIdx) {
+  const data = await getWeeklySyncState();
+  data.tasks[weekIdx].t.splice(taskIdx, 1);
+  await saveWeeklySyncState(data);
+  render_tasks();
+}
+
+async function addWeeklyTask() {
+  const input = document.getElementById('weeklyTaskText');
+  const text = input.value.trim();
+  if (!text) return;
+  const data = await getWeeklySyncState();
+  data.tasks[weeklyPlanWeek].t.push({
+    x: text,
+    g: document.getElementById('weeklyTaskCat').value,
+    s: document.getElementById('weeklyTaskSlot').value,
+    d: false
+  });
+  await saveWeeklySyncState(data);
+  input.value = '';
+  render_tasks();
 }
 
 function setTasksFilter(f) {

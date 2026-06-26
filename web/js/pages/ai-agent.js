@@ -1,155 +1,174 @@
-let chatMessages = [];
+let webAgentQueue = [];
+let webAgentLastScan = null;
+let webAgentTab = 0;
+
+const webAgentTypeLabel = { email_reply:'Lead reply', cold_email:'Cold email', quote_draft:'Quote draft', linkedin_post:'LinkedIn post', opportunity:'Opportunity', task_reminder:'Task reminder' };
+const webAgentTypeIcon  = { email_reply:'ti-mail', cold_email:'ti-send', quote_draft:'ti-file-invoice', linkedin_post:'ti-brand-linkedin', opportunity:'ti-briefcase', task_reminder:'ti-bell' };
+const webAgentTypeColor = { email_reply:'var(--brand-mid)', cold_email:'var(--accent)', quote_draft:'#3fb950', linkedin_post:'#0a66c2', opportunity:'#a371f7', task_reminder:'#f85149' };
+const webAgentFlagColor = { lead:'#3fb950', quote_request:'var(--accent)', urgent:'#f85149', follow_up:'var(--brand-mid)', outreach:'var(--accent)', content:'var(--brand-mid)', opportunity:'#a371f7' };
 
 async function render_agent() {
   const el = document.getElementById('page-agent');
-  chatMessages = [];
+  el.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+    <div>
+      <div style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace" id="webAgentLastScan">Never scanned</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:2px">Claude scans your emails and platforms, prepares everything — you just approve</div>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn" style="display:flex;align-items:center;gap:6px" onclick="webAgentDesktopScanNotice()"><i class="ti ti-refresh"></i> Run full scan</button>
+      <button class="btn bo bsm" style="color:#f85149;border-color:rgba(248,81,73,.3)" onclick="webAgentReset()" title="Clear cloud queue"><i class="ti ti-trash"></i> Reset all</button>
+    </div>
+  </div>
+  <div class="g4" style="margin-bottom:14px">
+    <div class="stat"><div class="slbl">Pending approval</div><div class="sval ca" id="webAgPending">—</div><div class="ssub">ready for your review</div></div>
+    <div class="stat"><div class="slbl">Emails prepared</div><div class="sval cb" id="webAgEmails">—</div><div class="ssub">replies + cold outreach</div></div>
+    <div class="stat"><div class="slbl">LinkedIn posts</div><div class="sval cg" id="webAgPosts">—</div><div class="ssub">ready to publish</div></div>
+    <div class="stat"><div class="slbl">Opportunities</div><div class="sval" id="webAgOpps">—</div><div class="ssub">Upwork + platforms</div></div>
+  </div>
+  <div class="wtabs" style="margin-bottom:12px">
+    <button class="wtab active" id="webAgTab0" onclick="webAgentSetTab(0)">Pending queue</button>
+    <button class="wtab" id="webAgTab1" onclick="webAgentSetTab(1)">Opportunities</button>
+    <button class="wtab" id="webAgTab2" onclick="webAgentSetTab(2)">History</button>
+    <button class="wtab" id="webAgTab3" onclick="webAgentSetTab(3)"><i class="ti ti-world" style="font-size:11px;margin-right:3px"></i>Website jobs</button>
+    <button class="wtab" id="webAgTab4" onclick="webAgentSetTab(4)"><i class="ti ti-checklist" style="font-size:11px;margin-right:3px"></i>My Tasks</button>
+    <button class="wtab" id="webAgTab5" onclick="webAgentSetTab(5)"><i class="ti ti-file-description" style="font-size:11px;margin-right:3px"></i>Job Cards</button>
+  </div>
+  <div id="webAgentTabContent"><div class="spin"></div> Loading...</div>`;
+  await webAgentLoadQueue();
+}
 
-  const quickActions = isManager() ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
-    <button class="btn bsm bo" onclick="aiSmartOutreach()"><i class="ti ti-mail" style="font-size:11px;margin-right:3px"></i> Draft Outreach</button>
-    <button class="btn bsm bo" onclick="aiQuickAction('Write a professional social media post for LinkedIn about TECHSINNO\\'s industrial automation services. Keep it under 200 words.')"><i class="ti ti-brand-linkedin" style="font-size:11px;margin-right:3px"></i> Social Post</button>
-    <button class="btn bsm bo" onclick="aiSmartFollowUp()"><i class="ti ti-bell" style="font-size:11px;margin-right:3px"></i> Follow-up Plan</button>
-    <button class="btn bsm bo" onclick="aiSmartQuote()"><i class="ti ti-file-invoice" style="font-size:11px;margin-right:3px"></i> Quote Ideas</button>
+function webAgentFmtTime(ts) {
+  if (!ts) return '—';
+  return new Date(ts).toLocaleString('en-ZA', { weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+}
+
+async function webAgentLoadQueue() {
+  try {
+    const data = await apiGet('/agent/queue');
+    webAgentQueue = (data && data.queue) || [];
+    webAgentLastScan = data && data.lastScan;
+  } catch {
+    webAgentQueue = [];
+    webAgentLastScan = null;
+  }
+  const last = document.getElementById('webAgentLastScan');
+  if (last) last.textContent = webAgentLastScan ? 'Last scan: ' + webAgentFmtTime(webAgentLastScan) : 'Never scanned — run full scan in Electron to start';
+  webAgentUpdateStats();
+  webAgentRenderTab();
+}
+
+function webAgentUpdateStats() {
+  const pending = webAgentQueue.filter(i => i.status === 'pending');
+  const emails = pending.filter(i => ['email_reply','cold_email','quote_draft'].includes(i.type));
+  const posts = pending.filter(i => i.type === 'linkedin_post');
+  const opps = pending.filter(i => i.type === 'opportunity');
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('webAgPending', pending.length);
+  set('webAgEmails', emails.length);
+  set('webAgPosts', posts.length);
+  set('webAgOpps', opps.length);
+}
+
+function webAgentSetTab(tab) {
+  webAgentTab = tab;
+  [0,1,2,3,4,5].forEach(i => document.getElementById('webAgTab' + i)?.classList.toggle('active', i === tab));
+  webAgentRenderTab();
+}
+
+function webAgentRenderTab() {
+  const el = document.getElementById('webAgentTabContent');
+  if (!el) return;
+  if (webAgentTab === 0) el.innerHTML = webAgentRenderPending();
+  else if (webAgentTab === 1) el.innerHTML = webAgentRenderOpportunities();
+  else if (webAgentTab === 2) el.innerHTML = webAgentRenderHistory();
+  else if (webAgentTab === 3) el.innerHTML = webAgentRenderWebsiteJobs();
+  else if (webAgentTab === 4) el.innerHTML = '<div class="card"><div style="font-size:12px;color:var(--text2)">My Tasks are available from the Weekly tasks / Team Tasks pages.</div></div>';
+  else el.innerHTML = '<div class="card"><div style="font-size:12px;color:var(--text2)">Job Cards are available from the Job Tasks page.</div></div>';
+}
+
+function webAgentRenderPending() {
+  const items = webAgentQueue.filter(i => i.status === 'pending').sort((a,b) => (a.priority || 9) - (b.priority || 9));
+  if (!items.length) return `<div class="card" style="text-align:center;padding:30px"><i class="ti ti-check" style="font-size:32px;color:#3fb950;display:block;margin-bottom:8px"></i><div style="font-size:13px;color:var(--text2)">Queue is empty.</div><div style="font-size:11px;color:var(--text3);margin-top:4px">Run full scan in Electron to find leads, prepare emails and LinkedIn posts.</div></div>`;
+  const groups = {};
+  items.forEach(i => { if (!groups[i.type]) groups[i.type] = []; groups[i.type].push(i); });
+  return Object.entries(groups).map(([type, list]) => `<div style="margin-bottom:16px">
+    <div class="fl" style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
+      <i class="ti ${webAgentTypeIcon[type] || 'ti-file'}" style="color:${webAgentTypeColor[type] || 'var(--text2)'}"></i>
+      <span>${webAgentTypeLabel[type] || type} (${list.length})</span>
+    </div>
+    ${list.map(webAgentRenderItem).join('')}
+  </div>`).join('');
+}
+
+function webAgentRenderItem(item) {
+  const flagColor = webAgentFlagColor[item.flagType] || 'var(--text3)';
+  const preview = (item.body || '').slice(0, 180).replace(/\n/g, ' ');
+  const diagnostic = (item.painPoint || item.evidence || item.techsinnoSolution || item.nextStep) ? `<div style="background:rgba(95,168,196,.08);border:1px solid rgba(95,168,196,.18);border-radius:var(--radius-sm);padding:8px 10px;margin:7px 0">
+    <div style="font-size:10px;color:var(--brand-mid);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Problem spotted</div>
+    ${item.painPoint ? `<div style="font-size:11px;color:var(--text);margin-bottom:3px"><strong>Pain:</strong> ${escHtml(item.painPoint)}</div>` : ''}
+    ${item.evidence ? `<div style="font-size:10px;color:var(--text2);margin-bottom:3px"><strong>Evidence/assumption:</strong> ${escHtml(item.evidence)}</div>` : ''}
+    ${item.techsinnoSolution ? `<div style="font-size:10px;color:var(--text2);margin-bottom:3px"><strong>TECHSINNO fit:</strong> ${escHtml(item.techsinnoSolution)}</div>` : ''}
+    ${item.nextStep ? `<div style="font-size:10px;color:var(--accent)"><strong>First step:</strong> ${escHtml(item.nextStep)}</div>` : ''}
   </div>` : '';
-
-  el.innerHTML = `<div style="display:flex;flex-direction:column;height:calc(100vh - 120px);max-width:760px">
-    ${quickActions}
-    <div id="chatArea" style="flex:1;overflow-y:auto;padding:8px 0"></div>
-    <div style="display:flex;gap:8px;padding:10px 0;border-top:1px solid var(--border)">
-      <textarea id="chatInput" style="flex:1;height:42px;resize:none" placeholder="Ask about tasks, draft a message, get work suggestions..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
-      <button class="btn" onclick="sendChat()" id="chatSendBtn" style="align-self:flex-end"><i class="ti ti-send" style="font-size:14px"></i></button>
+  return `<div style="background:var(--bg3);border:1px solid var(--border);border-left:3px solid ${flagColor};border-radius:var(--radius);padding:11px 13px;margin-bottom:8px">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:500;color:var(--text);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(item.title || item.subject || '(untitled)')}</div>
+        <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace">${escHtml(item.reason || '')}</div>
+      </div>
+      <button class="btn bsm bo" onclick="webAgentDismiss('${item.id}')">Skip</button>
+    </div>
+    ${item.to ? `<div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:5px">To: ${escHtml(item.to)}</div>` : ''}
+    ${diagnostic}
+    <div style="font-size:11px;color:var(--text2);line-height:1.5;margin:6px 0 9px;background:var(--bg4);padding:7px 9px;border-radius:var(--radius-sm)">${escHtml(preview)}${item.body && item.body.length > 180 ? '…' : ''}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      ${item.url ? `<button class="btn bsm" onclick="window.open('${item.url}','_blank')"><i class="ti ti-external-link"></i> View</button>` : ''}
+      <button class="btn bsm bo" onclick="webAgentCopy('${item.id}')"><i class="ti ti-copy"></i> Copy</button>
     </div>
   </div>`;
-
-  const area = document.getElementById('chatArea');
-  area.innerHTML = `<div style="text-align:center;padding:40px 0;color:var(--text3)">
-    <i class="ti ti-robot" style="font-size:32px;display:block;margin-bottom:8px"></i>
-    <div style="font-size:13px;font-weight:500;margin-bottom:4px">TECHSINNO AI Assistant</div>
-    <div style="font-size:11px">Operational help only — task management, drafting messages, work suggestions.</div>
-    ${isManager() ? '<div style="font-size:10px;margin-top:8px;color:var(--brand-mid)">Manager mode: full business context</div>' : '<div style="font-size:10px;margin-top:8px;color:var(--text3)">Staff mode: task-focused assistance</div>'}
-  </div>`;
 }
 
-async function sendChat() {
-  const input = document.getElementById('chatInput');
-  const text = input.value.trim();
-  if (!text) return;
-
-  chatMessages.push({ role: 'user', content: text });
-  input.value = '';
-
-  const area = document.getElementById('chatArea');
-  if (chatMessages.length === 1) area.innerHTML = '';
-
-  area.innerHTML += `<div style="display:flex;gap:8px;margin-bottom:12px;justify-content:flex-end">
-    <div style="background:var(--brand);color:#fff;padding:8px 12px;border-radius:10px 10px 2px 10px;max-width:75%;font-size:12px;white-space:pre-wrap">${escChat(text)}</div>
-  </div>`;
-
-  const loadingId = 'ai-loading-' + Date.now();
-  area.innerHTML += `<div id="${loadingId}" style="display:flex;gap:8px;margin-bottom:12px">
-    <div style="width:28px;height:28px;border-radius:50%;background:var(--card-hover);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-robot" style="font-size:14px;color:var(--brand-mid)"></i></div>
-    <div style="background:var(--card-hover);padding:8px 12px;border-radius:10px 10px 10px 2px;font-size:12px"><div class="spin" style="width:14px;height:14px;border-width:2px"></div></div>
-  </div>`;
-  area.scrollTop = area.scrollHeight;
-
-  const btn = document.getElementById('chatSendBtn');
-  btn.disabled = true;
-
-  try {
-    const data = await apiPost('/ai/chat', { messages: chatMessages });
-    const reply = (data && data.text) || (data && data.error) || 'No response';
-    chatMessages.push({ role: 'assistant', content: reply });
-
-    const loader = document.getElementById(loadingId);
-    if (loader) {
-      loader.innerHTML = `<div style="width:28px;height:28px;border-radius:50%;background:var(--card-hover);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-robot" style="font-size:14px;color:var(--brand-mid)"></i></div>
-        <div style="background:var(--card-hover);padding:8px 12px;border-radius:10px 10px 10px 2px;max-width:75%;font-size:12px;white-space:pre-wrap">${formatAiReply(reply)}</div>`;
-    }
-  } catch {
-    const loader = document.getElementById(loadingId);
-    if (loader) {
-      loader.innerHTML = `<div style="width:28px;height:28px;border-radius:50%;background:#f8514920;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-alert-circle" style="font-size:14px;color:#f85149"></i></div>
-        <div style="background:#f8514910;padding:8px 12px;border-radius:10px;font-size:12px;color:#f85149">Failed to get response. Please try again.</div>`;
-    }
-    chatMessages.pop();
-  }
-
-  btn.disabled = false;
-  area.scrollTop = area.scrollHeight;
-  input.focus();
+function webAgentRenderOpportunities() {
+  const opps = webAgentQueue.filter(i => i.type === 'opportunity' && i.status !== 'dismissed');
+  if (!opps.length) return '<div class="card" style="text-align:center;padding:30px;color:var(--text2)">No opportunities yet.</div>';
+  return opps.map(webAgentRenderItem).join('');
 }
 
-function escChat(s) {
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
+function webAgentRenderHistory() {
+  const done = webAgentQueue.filter(i => ['approved','dismissed','error'].includes(i.status));
+  if (!done.length) return '<div class="card" style="text-align:center;padding:30px;color:var(--text2)">No history yet.</div>';
+  return done.map(i => `<div class="tr"><div style="flex:1"><div style="font-size:12px;color:var(--text)">${escHtml(i.title || i.subject || '(untitled)')}</div><div style="font-size:10px;color:var(--text3)">${escHtml(i.status)}</div></div></div>`).join('');
 }
 
-function formatAiReply(text) {
-  let safe = escChat(text);
-  safe = safe.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-  safe = safe.replace(/`([^`]+)`/g, '<code style="background:var(--bg);padding:1px 4px;border-radius:3px;font-family:\'DM Mono\',monospace;font-size:11px">$1</code>');
-  return safe;
+function webAgentRenderWebsiteJobs() {
+  const jobs = webAgentQueue.filter(i => i.source === 'website_match' && i.status !== 'dismissed');
+  if (!jobs.length) return '<div class="card" style="text-align:center;padding:30px;color:var(--text2)">No website-matched jobs yet.</div>';
+  return jobs.map(webAgentRenderItem).join('');
 }
 
-function aiQuickAction(prompt) {
-  const input = document.getElementById('chatInput');
-  input.value = prompt;
-  sendChat();
+async function webAgentDismiss(id) {
+  webAgentQueue = webAgentQueue.map(i => i.id === id ? { ...i, status: 'dismissed' } : i);
+  await apiPut('/agent/queue', { queue: webAgentQueue, lastScan: webAgentLastScan });
+  webAgentUpdateStats();
+  webAgentRenderTab();
 }
 
-async function aiSmartOutreach() {
-  try {
-    const data = await apiGet('/clients');
-    const clients = (data && data.clients) || [];
-    const leads = clients.filter(c => c.status === 'lead').slice(0, 5);
-    if (leads.length) {
-      const leadList = leads.map(c => `- ${c.companyName} (${c.industry || 'unknown industry'}, ${c.contactName || 'no contact'}, ${c.email || 'no email'})`).join('\n');
-      aiQuickAction(`I have these leads in my CRM that haven't been contacted yet:\n${leadList}\n\nAct as a TECHSINNO business scout, not a generic email writer. Pick the best lead and do this:\n1. Identify the most likely operational pain for that company/industry.\n2. Explain the evidence and assumptions.\n3. Match it to one TECHSINNO service: PCB repair, PLC/SCADA automation, IoT monitoring, diagnostics, or preventive maintenance.\n4. Suggest a low-friction first step.\n5. Then draft a short specific email with Subject: and Body: lines.\nAvoid generic phrases like "innovative solutions" or "streamline operations". Do not invent past work.`);
-    } else {
-      aiQuickAction('Act as a TECHSINNO business scout. Pick one Western Cape sector where factories/farms/food processors likely have a real operational pain. Diagnose the pain, explain the assumption, match it to a TECHSINNO service, suggest a first step, then draft a short specific outreach email with Subject: and Body: lines. Do not write a generic sales email.');
-    }
-  } catch {
-    aiQuickAction('Act as a TECHSINNO business scout. Diagnose one real likely problem for a Western Cape manufacturing company, match it to a TECHSINNO service, then draft a short specific outreach email.');
-  }
+async function webAgentReset() {
+  if (!confirm('Clear the shared AI queue?')) return;
+  webAgentQueue = [];
+  webAgentLastScan = null;
+  await apiPut('/agent/queue', { queue: [], lastScan: null });
+  webAgentUpdateStats();
+  webAgentRenderTab();
 }
 
-async function aiSmartFollowUp() {
-  try {
-    const data = await apiGet('/clients');
-    const clients = (data && data.clients) || [];
-    const now = new Date();
-    const overdue = clients.filter(c => c.followUpDate && new Date(c.followUpDate) <= now && !['won', 'lost'].includes(c.status));
-    const active = clients.filter(c => ['contacted', 'quoted', 'negotiating'].includes(c.status));
-
-    let prompt = 'Here is my current CRM pipeline:\n';
-    if (overdue.length) {
-      prompt += '\nOVERDUE FOLLOW-UPS:\n' + overdue.map(c => `- ${c.companyName} (${c.status}, follow-up was due ${new Date(c.followUpDate).toLocaleDateString('en-ZA')}${c.contactName ? ', contact: ' + c.contactName : ''}${c.email ? ', ' + c.email : ''})`).join('\n');
-    }
-    if (active.length) {
-      prompt += '\nACTIVE LEADS:\n' + active.map(c => `- ${c.companyName} (${c.status}, R${Math.round(c.estimatedValue || 0).toLocaleString()}${c.contactName ? ', ' + c.contactName : ''})`).join('\n');
-    }
-    if (!overdue.length && !active.length) {
-      prompt += 'No active leads or overdue follow-ups.\n';
-    }
-    prompt += '\nPrioritize which leads I should follow up with TODAY, explain why, and draft a short follow-up message for the #1 priority.';
-    aiQuickAction(prompt);
-  } catch {
-    aiQuickAction('Based on my CRM pipeline, which leads should I follow up with first? Suggest priorities and draft a brief follow-up message.');
-  }
+function webAgentCopy(id) {
+  const item = webAgentQueue.find(i => i.id === id);
+  if (!item) return;
+  navigator.clipboard.writeText([item.subject, item.body].filter(Boolean).join('\n\n'));
+  ntf('Copied');
 }
 
-async function aiSmartQuote() {
-  try {
-    const data = await apiGet('/clients');
-    const clients = (data && data.clients) || [];
-    const quotable = clients.filter(c => ['contacted', 'quoted', 'negotiating'].includes(c.status)).slice(0, 5);
-    if (quotable.length) {
-      const list = quotable.map(c => `- ${c.companyName} (${c.industry || 'unknown'}, status: ${c.status}, est. value: R${Math.round(c.estimatedValue || 0).toLocaleString()})`).join('\n');
-      aiQuickAction(`Here are my active leads that could use quotes:\n${list}\n\nFor the most promising one, suggest specific line items for a quote based on their industry. Include realistic pricing in ZAR for TECHSINNO's services (PCB repair, PLC programming, SCADA setup, IoT monitoring). Format as a ready-to-use quote with Description, Qty, Unit Price, and Total for each line item.`);
-    } else {
-      aiQuickAction('Suggest 3 quote ideas for common industrial electronics services TECHSINNO could offer. Include line items with Description, Qty, Unit Price (ZAR), and Total for each.');
-    }
-  } catch {
-    aiQuickAction('Suggest 3 quote ideas for common industrial electronics services we could offer. Include line items and pricing in ZAR.');
-  }
+function webAgentDesktopScanNotice() {
+  ntf('Run full scan from the Electron manager app; web shows the shared queue.');
 }

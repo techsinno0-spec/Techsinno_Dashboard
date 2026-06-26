@@ -1737,15 +1737,37 @@ ipcMain.handle('agent-get-queue', () => ({
   opportunities: store.get('agent_opportunities', [])
 }));
 
-ipcMain.handle('agent-dismiss', (_, id) => {
+async function agentCloudSaveQueue() {
+  try {
+    const apiBase = getApiBase();
+    if (!apiBase || !store.get('auth_token')) return;
+    await ensureElectronToken();
+    const token = store.get('auth_token');
+    await axios.put(`${apiBase}/api/agent/queue`, {
+      queue: store.get('agent_queue', []),
+      lastScan: store.get('agent_last_scan', null)
+    }, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'X-Techsinno-Token': token,
+        'Content-Type': 'application/json'
+      },
+      timeout: 15000
+    });
+  } catch {}
+}
+
+ipcMain.handle('agent-dismiss', async (_, id) => {
   const q = store.get('agent_queue', []);
   const i = q.findIndex(x => x.id === id);
   if (i !== -1) { q[i].status = 'dismissed'; store.set('agent_queue', q); }
+  await agentCloudSaveQueue();
   return true;
 });
 
-ipcMain.handle('agent-clear-history', () => {
+ipcMain.handle('agent-clear-history', async () => {
   store.set('agent_queue', store.get('agent_queue', []).filter(i => i.status === 'pending'));
+  await agentCloudSaveQueue();
   return true;
 });
 
@@ -1781,11 +1803,13 @@ ipcMain.handle('agent-approve', async (_, item) => {
     const q = store.get('agent_queue', []);
     const i = q.findIndex(x => x.id === item.id);
     if (i !== -1) { q[i].status = 'approved'; q[i].approvedAt = Date.now(); store.set('agent_queue', q); }
+    await agentCloudSaveQueue();
     return result;
   } catch(e) {
     const q = store.get('agent_queue', []);
     const i = q.findIndex(x => x.id === item.id);
     if (i !== -1) { q[i].status = 'error'; q[i].errorMsg = e.message; store.set('agent_queue', q); }
+    await agentCloudSaveQueue();
     return { error: e.message };
   }
 });
@@ -1975,6 +1999,7 @@ Return ONLY valid JSON array:
     const merged = [...store.get('agent_queue', []), ...newItems];
     store.set('agent_queue', merged);
     store.set('agent_last_scan', Date.now());
+    await agentCloudSaveQueue();
 
     // Auto-create CRM entries for email leads and cold email targets
     let crmCreated = 0;
@@ -2131,9 +2156,10 @@ Content: ${text}` }]
 
 // ─── AGENT RESET ─────────────────────────────────────────────────────────────
 
-ipcMain.handle('agent-reset', () => {
+ipcMain.handle('agent-reset', async () => {
   store.set('agent_queue', []);
   store.set('agent_last_scan', null);
+  await agentCloudSaveQueue();
   return true;
 });
 

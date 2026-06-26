@@ -1,28 +1,40 @@
 async function render_goals() {
   if (!isManager()) return;
   const el = document.getElementById('page-goals');
-
-  el.innerHTML = `<div style="max-width:680px">
-    <p style="color:var(--text3);font-size:12px;margin-bottom:12px">Your private 90-day business goals. Only visible to you.</p>
-    <div id="goalsContainer"></div>
-    <button class="btn bsm bo" style="margin-top:10px" onclick="showAddGoal()"><i class="ti ti-plus" style="font-size:12px"></i> Add Goal</button>
-    <div id="addGoalForm" style="display:none;margin-top:10px"></div>
-  </div>`;
-
+  el.innerHTML = '<div id="goalsContainer"><div class="spin"></div> Loading 90-day goals...</div>';
   loadGoals();
 }
 
 let goalsData = [];
 let syncState = null;
 
+const WEB_GOAL_DEFAULTS = [
+  { p: 1, t: 'Business bank account open', d: false },
+  { p: 1, t: 'SARS eFiling registered', d: false },
+  { p: 1, t: 'Workshop set up', d: false },
+  { p: 1, t: 'LinkedIn company page live', d: false },
+  { p: 1, t: 'One-page website live', d: false },
+  { p: 1, t: 'First cold outreach sent', d: false },
+  { p: 1, t: 'First paid repair job done', d: false },
+  { p: 2, t: '2-4 repair jobs completed', d: false },
+  { p: 2, t: 'Case study on LinkedIn', d: false },
+  { p: 2, t: '3+ warm referral leads', d: false },
+  { p: 2, t: '2 factory audits booked', d: false },
+  { p: 2, t: 'Google Business Profile live', d: false },
+  { p: 3, t: 'Retainer proposal sent', d: false },
+  { p: 3, t: 'IoT pilot agreed', d: false },
+  { p: 3, t: 'R40,000+ revenue reached', d: false },
+  { p: 3, t: 'Q2 plan written', d: false }
+];
+
 function normalizeGoal(g, idx) {
   return {
     title: g.title || g.t || `Goal ${idx + 1}`,
     description: g.description || '',
     deadline: g.deadline || null,
-    progress: g.progress !== undefined ? g.progress : (g.d ? 100 : 0),
-    phase: g.phase || g.p || 1,
-    done: g.done !== undefined ? g.done : !!g.d,
+    progress: g.progress !== undefined ? Number(g.progress || 0) : (g.d ? 100 : 0),
+    phase: Number(g.phase || g.p || 1),
+    done: g.done !== undefined ? !!g.done : !!g.d,
     raw: g
   };
 }
@@ -32,7 +44,7 @@ function toElectronGoal(g) {
     ...g.raw,
     t: g.title,
     p: Number(g.phase || g.raw?.p || 1),
-    d: Number(g.progress || 0) >= 100,
+    d: !!g.done || Number(g.progress || 0) >= 100,
     title: g.title,
     description: g.description,
     deadline: g.deadline,
@@ -47,84 +59,47 @@ async function loadGoals() {
   try {
     syncState = await syncLoad();
     goalsData = ((syncState && syncState.data && syncState.data.goals) || []).map(normalizeGoal);
-    if (!goalsData.length) {
-      const data = await apiGet('/config/goals_private');
-      goalsData = ((data && data.config && data.config.goals) || []).map(normalizeGoal);
-    }
   } catch {
     goalsData = [];
   }
-
-  if (goalsData.length === 0) {
-    container.innerHTML = '<div class="empty-state"><i class="ti ti-target"></i>No goals set yet. Add your first 90-day goal.</div>';
-    return;
-  }
+  if (!goalsData.length) goalsData = WEB_GOAL_DEFAULTS.map(normalizeGoal);
 
   let html = '';
-  goalsData.forEach((g, i) => {
-    const pct = g.progress || 0;
-    const color = pct >= 100 ? '#3fb950' : pct >= 50 ? 'var(--brand-mid)' : 'var(--accent)';
-    html += `<div class="card" style="margin-bottom:8px;padding:12px 14px">
-      <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:6px">
-        <div style="font-weight:500;font-size:13px;flex:1">${escHtml(g.title)}</div>
-        <div style="display:flex;gap:4px">
-          <button class="btn bsm bo" onclick="editGoalProgress(${i})" title="Update progress"><i class="ti ti-chart-line" style="font-size:11px"></i></button>
-          <button class="btn bsm bo" onclick="deleteGoal(${i})" title="Remove"><i class="ti ti-trash" style="font-size:11px"></i></button>
+  [1, 2, 3].forEach(phase => {
+    const list = goalsData.filter(g => Number(g.phase || 1) === phase);
+    const pct = list.length ? Math.round(list.filter(g => g.done || Number(g.progress || 0) >= 100).length / list.length * 100) : 0;
+    const phaseLabel = phase === 1 ? 'Foundation' : phase === 2 ? 'Traction' : 'Scale';
+    const days = phase === 1 ? 'Days 1-30' : phase === 2 ? 'Days 31-60' : 'Days 61-90';
+    const status = phase === 1 ? 'Active' : 'Upcoming';
+    const color = phase === 1 ? 'var(--brand-mid)' : phase === 2 ? 'var(--accent)' : '#3fb950';
+    html += `<div class="card" style="margin-bottom:10px;border-color:${phase === 1 ? 'rgba(95,168,196,.35)' : 'var(--border)'}">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px">
+        <div>
+          <div style="font-family:'Syne',sans-serif;font-size:15px;color:${color};font-weight:700">Phase ${phase} — ${phaseLabel}</div>
+          <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace">${days}</div>
         </div>
+        <span class="bdg" style="background:${phase === 1 ? 'rgba(63,185,80,.18)' : 'var(--bg4)'};color:${phase === 1 ? '#3fb950' : 'var(--text3)'}">${status}</span>
       </div>
-      ${g.description ? `<div style="font-size:11px;color:var(--text3);margin-bottom:6px">${escHtml(g.description)}</div>` : ''}
-      <div style="height:6px;background:var(--card-hover);border-radius:3px;overflow:hidden">
-        <div style="height:100%;width:${pct}%;background:${color};border-radius:3px;transition:width .3s"></div>
-      </div>
-      <div style="font-size:10px;color:var(--text3);margin-top:4px;font-family:'DM Mono',monospace">${pct}% complete${g.deadline ? ' · Due ' + g.deadline : ''}</div>
+      <div style="font-size:11px;color:var(--text2);font-weight:600;margin-bottom:5px">Goal progress <span style="float:right;font-family:'DM Mono',monospace;color:var(--text2)">${pct}%</span></div>
+      <div class="pt" style="margin-bottom:10px"><div class="pf ${phase === 1 ? 'pf-brand' : phase === 2 ? 'pf-accent' : 'pf-green'}" style="width:${pct}%"></div></div>
+      ${list.map(g => {
+        const idx = goalsData.indexOf(g);
+        const done = g.done || Number(g.progress || 0) >= 100;
+        return `<div class="tr">
+          <input type="checkbox" ${done ? 'checked' : ''} onchange="toggleGoalDone(${idx})">
+          <div style="font-size:12px;color:var(--text);${done ? 'text-decoration:line-through;color:var(--text3)' : ''}">${escHtml(g.title)}</div>
+        </div>`;
+      }).join('')}
     </div>`;
   });
   container.innerHTML = html;
 }
 
-function showAddGoal() {
-  const form = document.getElementById('addGoalForm');
-  form.style.display = form.style.display === 'none' ? 'block' : 'none';
-  form.innerHTML = `<div class="card" style="padding:12px">
-    <div class="flbl">Goal Title</div>
-    <input type="text" id="goalTitle" style="width:100%;margin-bottom:6px" placeholder="e.g. Sign 5 new factory clients">
-    <div class="flbl">Description (optional)</div>
-    <textarea id="goalDesc" style="width:100%;height:50px;margin-bottom:6px" placeholder="Details..."></textarea>
-    <div class="flbl">Deadline (optional)</div>
-    <input type="date" id="goalDeadline" style="width:200px;margin-bottom:8px">
-    <div><button class="btn bsm" onclick="submitGoal()">Add Goal</button> <button class="btn bsm bo" onclick="document.getElementById('addGoalForm').style.display='none'">Cancel</button></div>
-  </div>`;
-}
-
-async function submitGoal() {
-  const title = document.getElementById('goalTitle').value.trim();
-  if (!title) { ntf('Title required'); return; }
-  goalsData.push({
-    title,
-    description: document.getElementById('goalDesc').value.trim(),
-    deadline: document.getElementById('goalDeadline').value || null,
-    progress: 0,
-    phase: 1,
-    done: false,
-    createdAt: new Date().toISOString()
-  });
-  await saveGoals();
-  document.getElementById('addGoalForm').style.display = 'none';
-}
-
-async function editGoalProgress(idx) {
-  const curr = goalsData[idx].progress || 0;
-  const val = prompt(`Update progress for "${goalsData[idx].title}" (0-100):`, curr);
-  if (val === null) return;
-  const n = parseInt(val);
-  if (isNaN(n) || n < 0 || n > 100) { ntf('Enter a number 0-100'); return; }
-  goalsData[idx].progress = n;
-  await saveGoals();
-}
-
-async function deleteGoal(idx) {
-  if (!confirm(`Delete goal "${goalsData[idx].title}"?`)) return;
-  goalsData.splice(idx, 1);
+async function toggleGoalDone(idx) {
+  const g = goalsData[idx];
+  const done = !(g.done || Number(g.progress || 0) >= 100);
+  g.done = done;
+  g.progress = done ? 100 : 0;
   await saveGoals();
 }
 
@@ -136,7 +111,6 @@ async function saveGoals() {
       posts: current.posts || [],
       goals: goalsData.map(toElectronGoal)
     });
-    await apiPut('/config/goals_private', { goals: goalsData });
     loadGoals();
   } catch {
     ntf('Failed to save goals');
