@@ -1375,23 +1375,36 @@ function fDate(d){if(!d)return'—';const dt=new Date(d);return dt.toLocaleDateS
 async function rComms(){
   const el=document.getElementById('p8');
   if(!el)return;
-  el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:8px;flex-wrap:wrap">
-    <div style="font-size:12px;color:var(--text2)">Website request intake only: quote requests, meeting requests, support/repair requests, and general enquiries.</div>
-    <button class="btn bo bsm" onclick="go(7)"><i class="ti ti-settings" style="font-size:12px"></i> Open Settings for integrations</button>
+  el.innerHTML=`<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:14px">
+    <div class="card" style="border-top:2px solid var(--brand-mid)">
+      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px"><i class="ti ti-file-invoice" style="color:var(--brand-mid);margin-right:5px"></i>Quote request</div>
+      <div style="font-size:12px;color:var(--text3);line-height:1.6">Capture website or phone quote requests and add them to CRM for follow-up.</div>
+    </div>
+    <div class="card" style="border-top:2px solid var(--accent)">
+      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px"><i class="ti ti-calendar-event" style="color:var(--accent);margin-right:5px"></i>Meeting request</div>
+      <div style="font-size:12px;color:var(--text3);line-height:1.6">Log a client meeting request and create a reminder so it does not disappear.</div>
+    </div>
+    <div class="card" style="border-top:2px solid #3fb950">
+      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px"><i class="ti ti-world" style="color:#3fb950;margin-right:5px"></i>Web request</div>
+      <div style="font-size:12px;color:var(--text3);line-height:1.6">Use this page for incoming web requests only. Integration setup lives in Settings.</div>
+    </div>
   </div>
   <div class="card" style="margin-bottom:14px">
-    <div class="ctitle"><i class="ti ti-inbox" style="color:var(--brand-mid);margin-right:5px"></i>New web request</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-      <div><div class="flbl">Request type</div><select id="webReqType" style="width:100%"><option value="Quote request">Quote request</option><option value="Meeting request">Meeting request</option><option value="Support / repair">Support / repair</option><option value="General enquiry">General enquiry</option></select></div>
-      <div><div class="flbl">Priority</div><select id="webReqPriority" style="width:100%"><option value="medium">Medium</option><option value="high">High</option><option value="low">Low</option></select></div>
-      <div><div class="flbl">Name / company</div><input id="webReqName" type="text" placeholder="Customer name" style="width:100%"></div>
-      <div><div class="flbl">Email / phone</div><input id="webReqContact" type="text" placeholder="email or phone" style="width:100%"></div>
-      <div><div class="flbl">Requested date</div><input id="webReqDate" type="date" style="width:100%"></div>
-      <div><div class="flbl">Requested time</div><input id="webReqTime" type="time" style="width:100%"></div>
+    <div style="font-size:11px;font-family:'DM Mono',monospace;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:18px">New communication request</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 10px;margin-bottom:12px">
+      <div><div class="flbl">Request type</div><select id="webReqType" style="width:100%"><option value="Quote request">Quote request</option><option value="Meeting request">Meeting request</option><option value="Web request">Web request</option><option value="Support / repair">Support / repair</option><option value="General enquiry">General enquiry</option></select></div>
+      <div><div class="flbl">Company / customer *</div><input id="webReqCompany" type="text" placeholder="Company name" style="width:100%"></div>
+      <div><div class="flbl">Contact name</div><input id="webReqContactName" type="text" placeholder="Person responsible" style="width:100%"></div>
+      <div><div class="flbl">Email</div><input id="webReqEmail" type="email" placeholder="name@example.com" style="width:100%"></div>
+      <div><div class="flbl">Phone</div><input id="webReqPhone" type="tel" placeholder="+27..." style="width:100%"></div>
+      <div><div class="flbl">Due / meeting date</div><input id="webReqDue" type="datetime-local" style="width:100%"></div>
     </div>
-    <div class="flbl">Message / scope</div>
-    <textarea id="webReqMessage" placeholder="What does the client need?" style="width:100%;min-height:90px;box-sizing:border-box;margin-bottom:10px"></textarea>
-    <div style="display:flex;justify-content:flex-end"><button class="btn" onclick="submitElectronWebRequest()"><i class="ti ti-send" style="font-size:12px"></i> Save request</button></div>
+    <div class="flbl">Request details *</div>
+    <textarea id="webReqDetails" placeholder="What does the customer need? Include machine, fault, quote scope, site, urgency, or meeting topic." style="width:100%;min-height:110px;box-sizing:border-box;margin-bottom:14px"></textarea>
+    <div style="display:flex;justify-content:flex-end;gap:8px">
+      <button class="btn bo" onclick="go(7)"><i class="ti ti-settings" style="font-size:12px"></i> Settings</button>
+      <button class="btn" onclick="submitElectronWebRequest()"><i class="ti ti-device-floppy" style="font-size:12px"></i> Save request</button>
+    </div>
   </div>
   <div class="card">
     <div class="ctitle">Where did the settings go?</div>
@@ -1405,18 +1418,23 @@ async function rComms(){
 async function submitElectronWebRequest(){
   if(!isE){ntf('Run as Electron app');return;}
   const type=document.getElementById('webReqType').value;
-  const name=document.getElementById('webReqName').value.trim();
-  const contact=document.getElementById('webReqContact').value.trim();
-  const message=document.getElementById('webReqMessage').value.trim();
-  const priority=document.getElementById('webReqPriority').value;
-  const requestedDate=document.getElementById('webReqDate').value;
-  const requestedTime=document.getElementById('webReqTime').value;
-  if(!name){ntf('Name / company is required');return;}
-  if(!message){ntf('Message / scope is required');return;}
+  const company=document.getElementById('webReqCompany').value.trim();
+  const contactName=document.getElementById('webReqContactName').value.trim();
+  const email=document.getElementById('webReqEmail').value.trim();
+  const phone=document.getElementById('webReqPhone').value.trim();
+  const message=document.getElementById('webReqDetails').value.trim();
+  const due=document.getElementById('webReqDue').value;
+  const requestedDate=due ? due.split('T')[0] : '';
+  const requestedTime=due && due.includes('T') ? due.split('T')[1] : '';
+  const priority=type==='Quote request'||type==='Support / repair'?'high':'medium';
+  if(!company){ntf('Company / customer is required');return;}
+  if(!message){ntf('Request details are required');return;}
+  const name=company;
+  const contact=[contactName,email,phone].filter(Boolean).join(' · ');
   const body={
-    name,
-    email: contact.includes('@') ? contact : '',
-    phone: contact.includes('@') ? '' : contact,
+    name: company,
+    email,
+    phone,
     source: 'website request',
     status: type==='Quote request' ? 'qualified' : 'new',
     notes: `${type}${requestedDate ? ' · '+requestedDate : ''}${requestedTime ? ' '+requestedTime : ''}\n\n${message}`,
