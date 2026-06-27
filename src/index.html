@@ -1432,10 +1432,11 @@ async function submitElectronWebRequest(){
   const name=company;
   const contact=[contactName,email,phone].filter(Boolean).join(' · ');
   const body={
-    name: company,
+    companyName: company,
+    contactName,
     email,
     phone,
-    source: 'website request',
+    source: 'website',
     status: type==='Quote request' ? 'qualified' : 'new',
     notes: `${type}${requestedDate ? ' · '+requestedDate : ''}${requestedTime ? ' '+requestedTime : ''}\n\n${message}`,
     priority
