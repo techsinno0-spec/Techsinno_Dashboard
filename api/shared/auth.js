@@ -10,8 +10,9 @@ function getSecret() {
 }
 
 function signToken(user) {
+  const role = user.role || 'staff';
   return jwt.sign(
-    { sub: user.id, role: user.role, name: user.displayName },
+    { sub: user.id, role, accountRole: role, name: user.displayName },
     getSecret(),
     { expiresIn: TOKEN_EXPIRY }
   );
@@ -38,10 +39,26 @@ function authenticate(request) {
   const token = extractToken(request);
   if (!token) return null;
   try {
-    return verifyToken(token);
+    const decoded = verifyToken(token);
+    const accountRole = decoded.accountRole || decoded.role || 'staff';
+    decoded.accountRole = accountRole;
+    decoded.isOwner = accountRole === 'owner';
+    // Backward compatibility: existing routes use `role === manager`.
+    // Owner is allowed to perform manager work, while sensitive routes can
+    // still check decoded.isOwner / decoded.accountRole.
+    if (accountRole === 'owner') decoded.role = 'manager';
+    return decoded;
   } catch {
     return null;
   }
+}
+
+function isOwner(decoded) {
+  return !!decoded && (decoded.isOwner || decoded.accountRole === 'owner');
+}
+
+function isManagerOrOwner(decoded) {
+  return !!decoded && (decoded.role === 'manager' || decoded.accountRole === 'owner');
 }
 
 function jsonResponse(body, status = 200) {
@@ -74,5 +91,7 @@ module.exports = {
   forbidden,
   badRequest,
   notFound,
+  isOwner,
+  isManagerOrOwner,
   TOKEN_EXPIRY
 };

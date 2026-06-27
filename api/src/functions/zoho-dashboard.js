@@ -1,6 +1,6 @@
 const { app } = require('@azure/functions');
 const { getItem, replaceItem } = require('../../shared/cosmos');
-const { authenticate, jsonResponse, unauthorized, forbidden } = require('../../shared/auth');
+const { authenticate, jsonResponse, unauthorized, forbidden, isOwner } = require('../../shared/auth');
 const axios = require('axios');
 
 const ZOHO_TOKEN_URL = 'https://accounts.zoho.com/oauth/v2/token';
@@ -32,7 +32,7 @@ app.http('zoho-dashboard', {
   handler: async (request) => {
     const decoded = authenticate(request);
     if (!decoded) return unauthorized();
-    if (decoded.role !== 'manager') return forbidden();
+    if (!isOwner(decoded)) return forbidden('Owner access required');
 
     try {
       let config;

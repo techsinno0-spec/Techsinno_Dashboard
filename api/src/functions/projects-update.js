@@ -15,6 +15,7 @@ app.http('projects-update', {
   handler: async (request) => {
     const decoded = authenticate(request);
     if (!decoded) return unauthorized();
+    if (decoded.role === 'viewer') return forbidden('View-only users cannot update projects');
 
     const projectId = request.params.projectId;
 

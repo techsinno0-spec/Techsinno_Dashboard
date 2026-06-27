@@ -1,6 +1,6 @@
 const { app } = require('@azure/functions');
 const { getItem, replaceItem } = require('../../shared/cosmos');
-const { authenticate, jsonResponse, unauthorized, forbidden, badRequest, notFound } = require('../../shared/auth');
+const { authenticate, jsonResponse, unauthorized, forbidden, badRequest, notFound, isOwner } = require('../../shared/auth');
 
 app.http('users-delete', {
   methods: ['DELETE'],
@@ -9,7 +9,7 @@ app.http('users-delete', {
   handler: async (request, context) => {
     const decoded = authenticate(request);
     if (!decoded) return unauthorized();
-    if (decoded.role !== 'manager') return forbidden();
+    if (!isOwner(decoded)) return forbidden('Owner access required');
 
     const userId = request.params.userId;
 
@@ -20,6 +20,7 @@ app.http('users-delete', {
     try {
       const user = await getItem('users', userId);
       if (!user) return notFound('User not found');
+      if (user.role === 'owner') return forbidden('Owner accounts cannot be deactivated here');
 
       user.active = false;
       user.updatedAt = new Date().toISOString();

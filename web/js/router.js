@@ -1,27 +1,27 @@
 const NAV_CONFIG = [
   { section: 'Overview' },
-  { id: 'dashboard', icon: 'ti-layout-dashboard', label: 'Dashboard', roles: ['manager', 'staff'] },
-  { id: 'tasks', icon: 'ti-checklist', label: 'Weekly tasks', roles: ['manager', 'staff'], taskView: 'weekly' },
+  { id: 'dashboard', icon: 'ti-layout-dashboard', label: 'Dashboard', roles: ['manager', 'staff', 'viewer'] },
+  { id: 'tasks', icon: 'ti-checklist', label: 'Weekly tasks', roles: ['manager', 'staff', 'viewer'], taskView: 'weekly' },
   { section: 'Business', roles: ['manager'] },
   { id: 'goals', icon: 'ti-target', label: '90-day goals', roles: ['manager'] },
-  { id: 'zoho', icon: 'ti-chart-bar', label: 'Zoho Books', roles: ['manager'] },
+  { id: 'zoho', icon: 'ti-chart-bar', label: 'Zoho Books', roles: ['owner'] },
   { id: 'social', icon: 'ti-share', label: 'Social Media', roles: ['manager'] },
   { id: 'inboxes', icon: 'ti-inbox', label: 'All Inboxes', roles: ['manager'] },
   { section: 'Admin' },
-  { id: 'reminders', icon: 'ti-bell', label: 'Reminders', roles: ['manager', 'staff'] },
-  { id: 'settings', icon: 'ti-settings', label: 'Settings', roles: ['manager'] },
+  { id: 'reminders', icon: 'ti-bell', label: 'Reminders', roles: ['manager', 'staff', 'viewer'] },
+  { id: 'settings', icon: 'ti-settings', label: 'Settings', roles: ['owner'] },
   { id: 'communications', icon: 'ti-messages', label: 'Communications', roles: ['manager'] },
   { section: 'Automation' },
-  { id: 'agent', icon: 'ti-robot', label: 'AI Agent', roles: ['manager', 'staff'] },
+  { id: 'agent', icon: 'ti-robot', label: 'AI Agent', roles: ['manager', 'staff', 'viewer'] },
   { section: 'Mail', roles: ['manager'] },
   { id: 'mail-zoho', target: 'inboxes', icon: 'ti-mail', label: 'Zoho Mail', roles: ['manager'], provider: 'zoho_mail' },
   { id: 'mail-gmail', target: 'inboxes', icon: 'ti-brand-gmail', label: 'Gmail', roles: ['manager'], provider: 'gmail' },
   { id: 'mail-outlook', target: 'inboxes', icon: 'ti-mail', label: 'Outlook', roles: ['manager'], provider: 'outlook' },
   { section: 'Production' },
-  { id: 'job-cards', icon: 'ti-tool', label: 'Job Tasks', roles: ['manager', 'staff'] },
+  { id: 'job-cards', icon: 'ti-tool', label: 'Job Tasks', roles: ['manager', 'staff', 'viewer'] },
   { section: 'Team', roles: ['manager'] },
-  { id: 'team-tasks', target: 'tasks', icon: 'ti-checklist', label: 'Team Tasks', roles: ['manager', 'staff'], taskView: 'team' },
-  { id: 'team', icon: 'ti-users', label: 'Team Mgmt', roles: ['manager'] },
+  { id: 'team-tasks', target: 'tasks', icon: 'ti-checklist', label: 'Team Tasks', roles: ['manager', 'staff', 'viewer'], taskView: 'team' },
+  { id: 'team', icon: 'ti-users', label: 'Team Mgmt', roles: ['owner'] },
   { id: 'staff-activity', icon: 'ti-activity', label: 'Staff Activity', roles: ['manager'] },
   { id: 'task-reports', icon: 'ti-report-analytics', label: 'Task Reports', roles: ['manager'] },
   { section: 'Manager Tools', roles: ['manager'] },
@@ -41,14 +41,14 @@ function buildSidebar() {
 
   NAV_CONFIG.forEach(item => {
     if (item.section) {
-      if (item.roles && !item.roles.includes(role)) return;
+      if (item.roles && !canAccessRole(item.roles)) return;
       const sec = document.createElement('div');
       sec.className = 'nav-sec';
       sec.textContent = item.section;
       nav.appendChild(sec);
       return;
     }
-    if (!item.roles.includes(role)) return;
+    if (!canAccessRole(item.roles)) return;
     const targetPage = item.target || item.id;
     const el = document.createElement('div');
     el.className = 'nav-item' + (item.id === currentNavId ? ' active' : '');
@@ -62,7 +62,7 @@ function buildSidebar() {
 function navigateTo(pageId, opts = {}) {
   const role = getUser().role;
   const navItem = NAV_CONFIG.find(n => n.id === (opts.navId || pageId));
-  if (navItem && !navItem.roles.includes(role)) return;
+  if (navItem && !canAccessRole(navItem.roles)) return;
 
   currentPage = pageId;
   currentNavId = opts.navId || pageId;

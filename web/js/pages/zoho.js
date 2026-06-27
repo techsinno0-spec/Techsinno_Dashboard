@@ -1,5 +1,5 @@
 async function render_zoho() {
-  if (!isManager()) return;
+  if (!isOwner()) return;
   const el = document.getElementById('page-zoho');
 
   el.innerHTML = '<div class="spin"></div> Loading Zoho Books data...';

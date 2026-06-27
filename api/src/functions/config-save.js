@@ -1,6 +1,6 @@
 const { app } = require('@azure/functions');
 const { getItem, createItem, replaceItem } = require('../../shared/cosmos');
-const { authenticate, jsonResponse, unauthorized, forbidden, badRequest } = require('../../shared/auth');
+const { authenticate, jsonResponse, unauthorized, forbidden, badRequest, isOwner } = require('../../shared/auth');
 
 app.http('config-save', {
   methods: ['PUT'],
@@ -9,7 +9,7 @@ app.http('config-save', {
   handler: async (request) => {
     const decoded = authenticate(request);
     if (!decoded) return unauthorized();
-    if (decoded.role !== 'manager') return forbidden();
+    if (!isOwner(decoded)) return forbidden('Owner access required');
 
     const service = request.params.service;
     const VALID = ['zoho_books', 'zoho_mail', 'gmail', 'outlook', 'linkedin', 'claude', 'hunter', 'cloudflare', 'onedrive', 'goals_private'];

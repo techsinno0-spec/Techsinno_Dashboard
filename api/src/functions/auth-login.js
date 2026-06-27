@@ -15,7 +15,7 @@ app.http('auth-login', {
       const body = await request.json();
       const { username, password } = body;
       if (!username || !password) {
-        return badRequest('Username and password are required');
+        return badRequest('Company email and password are required');
       }
       const cleanUsername = username.toLowerCase().trim();
       const rateCheck = await checkLoginRateLimit(cleanUsername);
@@ -24,7 +24,7 @@ app.http('auth-login', {
       }
       const users = await queryItems(
         'users',
-        'SELECT * FROM c WHERE c.username = @username AND c.active = true',
+        'SELECT * FROM c WHERE (c.username = @username OR c.email = @username) AND c.active = true',
         [{ name: '@username', value: cleanUsername }]
       );
       if (users.length === 0) {
@@ -36,6 +36,13 @@ app.http('auth-login', {
       if (!valid) {
         await recordFailedLogin(cleanUsername);
         return jsonResponse({ error: 'Invalid username or password' }, 401);
+      }
+      const shouldBeOwner =
+        user.username === 'frank' ||
+        user.username === 'frank@techsinno.com' ||
+        user.email === 'frank@techsinno.com';
+      if (shouldBeOwner && user.role !== 'owner') {
+        user.role = 'owner';
       }
       await clearLoginRateLimit(cleanUsername);
       const token = signToken(user);

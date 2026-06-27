@@ -33,8 +33,8 @@ input:focus{border-color:var(--brand-mid);}
       <div class="logo-text">TECHSINNO</div>
     </div>
     <div class="login-sub">Team Dashboard · Sign In</div>
-    <div class="flbl">Username</div>
-    <input type="text" id="loginUser" placeholder="Enter your username" autofocus>
+    <div class="flbl">Zoho / company email</div>
+    <input type="email" id="loginUser" placeholder="frank@techsinno.com" autofocus>
     <div class="flbl">Password</div>
     <input type="password" id="loginPass" placeholder="Enter your password">
     <div class="flbl">Cloud dashboard URL</div>
@@ -67,7 +67,7 @@ async function doLogin() {
   const err = document.getElementById('loginErr');
   const btn = document.getElementById('loginBtn');
 
-  if (!username || !password) { err.textContent = 'Enter username and password'; return; }
+  if (!username || !password) { err.textContent = 'Enter company email and password'; return; }
   if (!apiBase) { err.textContent = 'Enter the cloud dashboard URL'; return; }
 
   err.textContent = '';

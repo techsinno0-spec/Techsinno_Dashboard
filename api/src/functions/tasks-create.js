@@ -15,6 +15,7 @@ app.http('tasks-create', {
   handler: async (request) => {
     const decoded = authenticate(request);
     if (!decoded) return unauthorized();
+    if (decoded.role === 'viewer') return forbidden('View-only users cannot create tasks');
 
     try {
       const body = await request.json();

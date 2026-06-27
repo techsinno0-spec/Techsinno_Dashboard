@@ -1,7 +1,7 @@
 const { app } = require('@azure/functions');
-const { getItem, replaceItem } = require('../../shared/cosmos');
+const { getItem, replaceItem, queryItems } = require('../../shared/cosmos');
 const { hashPassword, validatePasswordStrength } = require('../../shared/password');
-const { authenticate, jsonResponse, unauthorized, forbidden, badRequest, notFound } = require('../../shared/auth');
+const { authenticate, jsonResponse, unauthorized, forbidden, badRequest, notFound, isOwner } = require('../../shared/auth');
 
 app.http('users-update', {
   methods: ['PUT'],
@@ -10,7 +10,7 @@ app.http('users-update', {
   handler: async (request, context) => {
     const decoded = authenticate(request);
     if (!decoded) return unauthorized();
-    if (decoded.role !== 'manager') return forbidden();
+    if (!isOwner(decoded)) return forbidden('Owner access required');
 
     const userId = request.params.userId;
 
@@ -22,8 +22,19 @@ app.http('users-update', {
       const { displayName, email, role, resetPassword } = body;
 
       if (displayName !== undefined) user.displayName = displayName.trim();
-      if (email !== undefined) user.email = email.trim();
-      if (role !== undefined && (role === 'manager' || role === 'staff')) {
+      if (email !== undefined) {
+        const cleanEmail = email.trim().toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) return badRequest('Use a valid company email address');
+        const existing = await queryItems(
+          'users',
+          'SELECT c.id FROM c WHERE c.username = @username AND c.id != @id',
+          [{ name: '@username', value: cleanEmail }, { name: '@id', value: user.id }]
+        );
+        if (existing.length > 0) return badRequest('Email/login already belongs to another user');
+        user.email = cleanEmail;
+        user.username = cleanEmail;
+      }
+      if (role !== undefined && ['owner', 'manager', 'staff', 'viewer'].includes(role)) {
         user.role = role;
       }
 

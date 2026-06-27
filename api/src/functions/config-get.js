@@ -1,6 +1,6 @@
 const { app } = require('@azure/functions');
 const { getItem } = require('../../shared/cosmos');
-const { authenticate, jsonResponse, unauthorized, forbidden } = require('../../shared/auth');
+const { authenticate, jsonResponse, unauthorized, forbidden, isOwner } = require('../../shared/auth');
 
 app.http('config-get', {
   methods: ['GET'],
@@ -9,7 +9,7 @@ app.http('config-get', {
   handler: async (request) => {
     const decoded = authenticate(request);
     if (!decoded) return unauthorized();
-    if (decoded.role !== 'manager') return forbidden();
+    if (!isOwner(decoded)) return forbidden('Owner access required');
 
     const service = request.params.service;
     const VALID = ['zoho_books', 'zoho_mail', 'gmail', 'outlook', 'linkedin', 'claude', 'hunter', 'cloudflare', 'onedrive', 'goals_private'];

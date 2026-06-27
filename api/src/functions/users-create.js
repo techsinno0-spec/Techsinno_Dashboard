@@ -1,7 +1,7 @@
 const { app } = require('@azure/functions');
 const { queryItems, createItem } = require('../../shared/cosmos');
 const { hashPassword, validatePasswordStrength } = require('../../shared/password');
-const { authenticate, jsonResponse, unauthorized, forbidden, badRequest } = require('../../shared/auth');
+const { authenticate, jsonResponse, unauthorized, forbidden, badRequest, isOwner } = require('../../shared/auth');
 const { sanitizeString, sanitizeUsername, sanitizeEmail } = require('../../shared/sanitize');
 const { v4: uuidv4 } = require('uuid');
 
@@ -12,24 +12,26 @@ app.http('users-create', {
   handler: async (request) => {
     const decoded = authenticate(request);
     if (!decoded) return unauthorized();
-    if (decoded.role !== 'manager') return forbidden();
+    if (!isOwner(decoded)) return forbidden('Owner access required');
 
     try {
       const body = await request.json();
       const { username, displayName, email, password, role } = body;
+      const identityEmail = sanitizeEmail(email || username || '');
 
-      if (!username || !displayName || !password) {
-        return badRequest('username, displayName, and password are required');
+      if (!identityEmail || !displayName || !password) {
+        return badRequest('company email, displayName, and password are required');
       }
 
-      const userRole = role === 'manager' ? 'manager' : 'staff';
+      const allowedRoles = ['owner', 'manager', 'staff', 'viewer'];
+      const userRole = allowedRoles.includes(role) ? role : 'staff';
 
       const strength = validatePasswordStrength(password);
       if (!strength.valid) return badRequest(strength.reason);
 
-      const cleanUsername = sanitizeUsername(username);
-      if (!/^[a-z0-9._-]{3,30}$/.test(cleanUsername)) {
-        return badRequest('Username must be 3-30 characters, only lowercase letters, numbers, dots, hyphens, underscores');
+      const cleanUsername = identityEmail.toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanUsername)) {
+        return badRequest('Use a valid company email address as the login');
       }
 
       const existing = await queryItems(
@@ -46,7 +48,7 @@ app.http('users-create', {
         id: `usr_${uuidv4()}`,
         username: cleanUsername,
         displayName: sanitizeString(displayName, 100),
-        email: sanitizeEmail(email || ''),
+        email: identityEmail,
         role: userRole,
         passwordHash: await hashPassword(password),
         mustChangePassword: true,

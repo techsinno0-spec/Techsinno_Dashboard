@@ -1,4 +1,4 @@
-// ─── PROJECTS PAGE ────────────────────────────────────────────────────────────
+﻿// â”€â”€â”€ PROJECTS PAGE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let projFilter = 'all';
 let projDetailId = null;
 let _allProjects = [];
@@ -25,7 +25,7 @@ async function render_projects() {
       <div class="wtab ${projFilter === 'completed' ? 'active' : ''}" onclick="setProjFilter('completed')">Completed</div>
     </div>`;
 
-    if (role === 'manager') {
+    if (isManager()) {
       html += `<div style="margin-bottom:14px">
         <button class="btn" onclick="showCreateProject()"><i class="ti ti-plus" style="font-size:13px"></i> New Project</button>
       </div>
@@ -53,9 +53,9 @@ async function render_projects() {
               </div>
               <div style="font-size:13px;font-weight:500;color:var(--text)">${escHtml(proj.name)}</div>
               <div style="font-size:11px;color:var(--text3);margin-top:3px">
-                <i class="ti ti-building" style="font-size:10px"></i> ${escHtml(proj.clientName || '—')}
-                ${phases.length > 0 ? ` &nbsp;·&nbsp; ${donePhases}/${phases.length} phases` : ''}
-                ${jobCards.length > 0 ? ` &nbsp;·&nbsp; <i class="ti ti-clipboard-list" style="font-size:10px"></i> ${jobCards.length} job card${jobCards.length !== 1 ? 's' : ''}` : ''}
+                <i class="ti ti-building" style="font-size:10px"></i> ${escHtml(proj.clientName || 'â€”')}
+                ${phases.length > 0 ? ` &nbsp;Â·&nbsp; ${donePhases}/${phases.length} phases` : ''}
+                ${jobCards.length > 0 ? ` &nbsp;Â·&nbsp; <i class="ti ti-clipboard-list" style="font-size:10px"></i> ${jobCards.length} job card${jobCards.length !== 1 ? 's' : ''}` : ''}
               </div>
               ${phaseProgress !== null ? `<div style="margin-top:8px;max-width:300px">
                 <div class="pt"><div class="pf pf-accent" style="width:${phaseProgress}%"></div></div>
@@ -132,7 +132,7 @@ function renderProjDetail(id, proj) {
   </div>`;
 
   // Status change
-  if (role === 'manager') {
+  if (isManager()) {
     html += `<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
       <span class="flbl" style="margin:0;padding-top:2px">Status:</span>
       ${['planning', 'active', 'on_hold', 'completed'].map(s =>
@@ -148,7 +148,7 @@ function renderProjDetail(id, proj) {
       <div style="width:18px;height:18px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff">${initials(getUserName(uid))}</div>
       ${escHtml(getUserName(uid))}
     </div>`).join('')}
-    ${role === 'manager' ? `<select id="projAssignAdd-${id}" style="font-size:11px;padding:3px 6px" onchange="addProjAssignee('${id}', this.value)">
+    ${isManager() ? `<select id="projAssignAdd-${id}" style="font-size:11px;padding:3px 6px" onchange="addProjAssignee('${id}', this.value)">
       <option value="">+ Assign</option>
       ${appUsers.filter(u => u.active && !(proj.assignedTo || []).includes(u.id)).map(u => `<option value="${u.id}">${escHtml(u.displayName)}</option>`).join('')}
     </select>` : ''}
@@ -157,7 +157,7 @@ function renderProjDetail(id, proj) {
   // Phases
   html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
     <div class="fl" style="margin:0">Project Phases</div>
-    ${role === 'manager' ? `<button class="btn bsm bo" onclick="showAddPhase('${id}')"><i class="ti ti-plus" style="font-size:11px"></i> Add Phase</button>` : ''}
+    ${isManager() ? `<button class="btn bsm bo" onclick="showAddPhase('${id}')"><i class="ti ti-plus" style="font-size:11px"></i> Add Phase</button>` : ''}
   </div>`;
   html += `<div id="projPhaseForm-${id}" style="display:none;margin-bottom:8px"></div>`;
 
@@ -174,10 +174,10 @@ function renderProjDetail(id, proj) {
           <div style="font-size:12px;color:var(--text);${ph.status === 'done' ? 'text-decoration:line-through;color:var(--text3)' : ''}">${escHtml(ph.name)}</div>
           ${ph.dueDate ? `<div style="font-size:10px;color:var(--text3)">Due ${formatDate(ph.dueDate)}</div>` : ''}
         </div>
-        ${role === 'manager' || (proj.assignedTo || []).includes(getUser().sub) ? `<select style="font-size:10px;padding:2px 4px" onchange="updatePhaseStatus('${id}',${idx},this.value)">
+        ${isManager() || (proj.assignedTo || []).includes(getUser().sub) ? `<select style="font-size:10px;padding:2px 4px" onchange="updatePhaseStatus('${id}',${idx},this.value)">
           ${['pending','in_progress','done'].map(s => `<option value="${s}" ${ph.status === s ? 'selected' : ''}>${s.replace('_',' ')}</option>`).join('')}
         </select>` : `<span class="bdg b-${ph.status}">${ph.status.replace('_',' ')}</span>`}
-        ${role === 'manager' ? `<button class="btn bsm bdng bo" style="padding:2px 6px" onclick="deletePhase('${id}',${idx})"><i class="ti ti-trash" style="font-size:10px"></i></button>` : ''}
+        ${isManager() ? `<button class="btn bsm bdng bo" style="padding:2px 6px" onclick="deletePhase('${id}',${idx})"><i class="ti ti-trash" style="font-size:10px"></i></button>` : ''}
       </div>`;
     });
     html += '</div>';
@@ -186,9 +186,9 @@ function renderProjDetail(id, proj) {
   // Linked Job Cards
   html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
     <div class="fl" style="margin:0">Linked Job Cards</div>
-    ${role === 'manager' && _allJobCards.length > 0 ? `<select id="projLinkJC-${id}" style="font-size:11px;padding:3px 6px" onchange="linkJobCardToProject('${id}', this.value)">
+    ${isManager() && _allJobCards.length > 0 ? `<select id="projLinkJC-${id}" style="font-size:11px;padding:3px 6px" onchange="linkJobCardToProject('${id}', this.value)">
       <option value="">+ Link Job Card</option>
-      ${_allJobCards.filter(jc => !linkedJCs.includes(jc.id)).map(jc => `<option value="${jc.id}">${escHtml(jc.jobNumber)} – ${escHtml(jc.title)}</option>`).join('')}
+      ${_allJobCards.filter(jc => !linkedJCs.includes(jc.id)).map(jc => `<option value="${jc.id}">${escHtml(jc.jobNumber)} â€“ ${escHtml(jc.title)}</option>`).join('')}
     </select>` : ''}
   </div>`;
 
@@ -202,10 +202,10 @@ function renderProjDetail(id, proj) {
       html += `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
         <i class="ti ti-clipboard-list" style="font-size:14px;color:var(--text3);flex-shrink:0"></i>
         <div style="flex:1">
-          <div style="font-size:12px;color:var(--text)">${escHtml(jc.jobNumber)} – ${escHtml(jc.title)}</div>
+          <div style="font-size:12px;color:var(--text)">${escHtml(jc.jobNumber)} â€“ ${escHtml(jc.title)}</div>
           <div style="font-size:10px;color:var(--text3)">${escHtml(jc.clientName)} ${jcStatusBadge(jc.status)}</div>
         </div>
-        ${role === 'manager' ? `<button class="btn bsm bo" style="padding:2px 6px" onclick="unlinkJCFromProject('${id}','${jcId}')"><i class="ti ti-unlink" style="font-size:10px"></i></button>` : ''}
+        ${isManager() ? `<button class="btn bsm bo" style="padding:2px 6px" onclick="unlinkJCFromProject('${id}','${jcId}')"><i class="ti ti-unlink" style="font-size:10px"></i></button>` : ''}
       </div>`;
     });
     html += '</div>';
@@ -216,7 +216,7 @@ function renderProjDetail(id, proj) {
   if (notes.length > 0) {
     notes.slice().reverse().forEach(n => {
       html += `<div class="note-item">
-        <div class="note-meta">${escHtml(n.authorName || getUserName(n.author))} · ${timeAgo(n.timestamp)}</div>
+        <div class="note-meta">${escHtml(n.authorName || getUserName(n.author))} Â· ${timeAgo(n.timestamp)}</div>
         <div class="note-text">${escHtml(n.text)}</div>
       </div>`;
     });
@@ -229,7 +229,7 @@ function renderProjDetail(id, proj) {
   </div>`;
 
   // Manager delete
-  if (role === 'manager') {
+  if (isManager()) {
     html += `<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:10px">
       <button class="btn bsm bdng bo" onclick="deleteProject('${id}')"><i class="ti ti-trash" style="font-size:12px"></i> Delete Project</button>
     </div>`;
@@ -239,13 +239,13 @@ function renderProjDetail(id, proj) {
   el.innerHTML = html;
 }
 
-// ─── HELPERS ───────────────────────────────────────────────────────────────────
+// â”€â”€â”€ HELPERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function projStatusBadge(status) {
   const map = { planning: 'b-low', active: 'b-in_progress', on_hold: 'b-medium', completed: 'b-done' };
   return `<span class="bdg ${map[status] || 'b-low'}">${(status || '').replace('_', ' ')}</span>`;
 }
 
-// ─── CREATE PROJECT ────────────────────────────────────────────────────────────
+// â”€â”€â”€ CREATE PROJECT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function showCreateProject() {
   const el = document.getElementById('createProjForm');
   if (el.style.display === 'block') { el.style.display = 'none'; return; }
@@ -254,7 +254,7 @@ function showCreateProject() {
   el.innerHTML = `<div class="card" style="margin-bottom:14px">
     <div class="ctitle">New Project</div>
     <div class="flbl">Project Name *</div>
-    <input type="text" id="projNewName" placeholder="e.g. Automated Irrigation System – Farm X" style="width:100%">
+    <input type="text" id="projNewName" placeholder="e.g. Automated Irrigation System â€“ Farm X" style="width:100%">
     <div class="flbl">Description</div>
     <textarea id="projNewDesc" placeholder="Project scope, objectives, deliverables..." style="width:100%"></textarea>
     <div style="display:flex;gap:8px;margin-top:6px">
@@ -321,7 +321,7 @@ async function submitCreateProject() {
   }
 }
 
-// ─── STATUS ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ STATUS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function updateProjStatus(id, status) {
   const data = await apiPut('/projects/' + id, { status });
   if (data && data.error) { ntf(data.error); return; }
@@ -329,7 +329,7 @@ async function updateProjStatus(id, status) {
   render_projects();
 }
 
-// ─── TEAM ──────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ TEAM â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function addProjAssignee(projId, userId) {
   if (!userId) return;
   const proj = _allProjects.find(p => p.id === projId);
@@ -342,7 +342,7 @@ async function addProjAssignee(projId, userId) {
   render_projects();
 }
 
-// ─── PHASES ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ PHASES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function showAddPhase(projId) {
   const el = document.getElementById('projPhaseForm-' + projId);
   if (el.style.display === 'block') { el.style.display = 'none'; return; }
@@ -351,7 +351,7 @@ function showAddPhase(projId) {
     <input type="text" id="phName-${projId}" placeholder="Phase name (e.g. Site Survey, Installation, Testing)" style="flex:2">
     <input type="date" id="phDue-${projId}" placeholder="Due date" style="flex:1">
     <button class="btn bsm" onclick="submitAddPhase('${projId}')">Add</button>
-    <button class="btn bsm bo" onclick="document.getElementById('projPhaseForm-${projId}').style.display='none'">✕</button>
+    <button class="btn bsm bo" onclick="document.getElementById('projPhaseForm-${projId}').style.display='none'">âœ•</button>
   </div>`;
 }
 
@@ -380,7 +380,7 @@ async function deletePhase(projId, phaseIdx) {
   render_projects();
 }
 
-// ─── JOB CARD LINKING ──────────────────────────────────────────────────────────
+// â”€â”€â”€ JOB CARD LINKING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function linkJobCardToProject(projId, jcId) {
   if (!jcId) return;
   const proj = _allProjects.find(p => p.id === projId);
@@ -403,7 +403,7 @@ async function unlinkJCFromProject(projId, jcId) {
   render_projects();
 }
 
-// ─── NOTES ─────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ NOTES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function addProjNote(projId) {
   const textarea = document.getElementById('projNote-' + projId);
   const text = textarea.value.trim();
@@ -414,7 +414,7 @@ async function addProjNote(projId) {
   render_projects();
 }
 
-// ─── DELETE ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ DELETE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function deleteProject(projId) {
   const proj = _allProjects.find(p => p.id === projId);
   if (!confirm('Delete project "' + (proj ? proj.name : projId) + '"? This cannot be undone.')) return;

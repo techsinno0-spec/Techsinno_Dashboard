@@ -1,8 +1,18 @@
 let showAddUser = false;
 let editingUserId = null;
 
+function roleLabel(role) {
+  const map = { owner: 'owner', manager: 'manager', staff: 'staff', viewer: 'view-only' };
+  return map[role] || 'staff';
+}
+
+function roleBadge(role) {
+  const map = { owner: 'b-high', manager: 'b-medium', staff: 'b-in_progress', viewer: 'b-pending' };
+  return `<span class="bdg ${map[role] || 'b-in_progress'}" style="margin-left:4px">${roleLabel(role)}</span>`;
+}
+
 async function render_team() {
-  if (!isManager()) return;
+  if (!isOwner()) return;
   const el = document.getElementById('page-team');
 
   el.innerHTML = '<div class="spin"></div> Loading team...';
@@ -12,33 +22,30 @@ async function render_team() {
 
   let html = '';
 
-  html += `<div style="margin-bottom:14px;display:flex;gap:8px;align-items:center">
-    <button class="btn" onclick="toggleAddUser()"><i class="ti ti-user-plus" style="font-size:13px"></i> Add Staff Member</button>
+  html += `<div style="margin-bottom:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <button class="btn" onclick="toggleAddUser()"><i class="ti ti-user-plus" style="font-size:13px"></i> Add Team Member</button>
     <span style="font-size:11px;color:var(--text3)">${users.filter(u => u.active).length} active users</span>
+    <span style="font-size:11px;color:var(--text3)">Login identity is the company / Zoho email address.</span>
   </div>`;
 
   html += '<div id="addUserForm" style="display:none"></div>';
 
-  // Active users
   html += '<div class="fl">Active Users</div>';
   users.filter(u => u.active).forEach(u => {
     html += `<div class="user-row">
-      <div class="user-avatar" style="background:${u.role === 'manager' ? 'var(--accent)' : 'var(--brand)'}">${initials(u.displayName)}</div>
+      <div class="user-avatar" style="background:${u.role === 'owner' ? '#f85149' : u.role === 'manager' ? 'var(--accent)' : 'var(--brand)'}">${initials(u.displayName)}</div>
       <div class="user-info">
-        <div class="user-name">${escHtml(u.displayName)} ${u.role === 'manager' ? '<span class="bdg b-medium" style="margin-left:4px">manager</span>' : '<span class="bdg b-in_progress" style="margin-left:4px">staff</span>'}</div>
-        <div class="user-meta">@${escHtml(u.username)} · ${escHtml(u.email || 'no email')} · Last login: ${timeAgo(u.lastLoginAt)}${u.mustChangePassword ? ' · <span style="color:var(--accent)">must change password</span>' : ''}</div>
+        <div class="user-name">${escHtml(u.displayName)} ${roleBadge(u.role)}</div>
+        <div class="user-meta">${escHtml(u.email || u.username || 'no email')} · Last login: ${timeAgo(u.lastLoginAt)}${u.mustChangePassword ? ' · <span style="color:var(--accent)">must change password</span>' : ''}</div>
       </div>
       <div class="user-actions">
         <button class="btn bsm bo" onclick="showEditUser('${u.id}')"><i class="ti ti-edit" style="font-size:12px"></i></button>
-        ${u.role !== 'manager' ? `<button class="btn bsm bdng" onclick="deactivateUser('${u.id}','${u.displayName}')"><i class="ti ti-user-minus" style="font-size:12px"></i></button>` : ''}
+        ${u.role !== 'owner' ? `<button class="btn bsm bdng" onclick="deactivateUser('${u.id}','${escHtml(u.displayName)}')"><i class="ti ti-user-minus" style="font-size:12px"></i></button>` : ''}
       </div>
     </div>`;
-    if (editingUserId === u.id) {
-      html += renderEditForm(u);
-    }
+    if (editingUserId === u.id) html += renderEditForm(u);
   });
 
-  // Inactive users
   const inactive = users.filter(u => !u.active);
   if (inactive.length > 0) {
     html += '<div class="fl">Inactive Users</div>';
@@ -46,8 +53,8 @@ async function render_team() {
       html += `<div class="user-row" style="opacity:.5">
         <div class="user-avatar" style="background:var(--bg4)">${initials(u.displayName)}</div>
         <div class="user-info">
-          <div class="user-name">${escHtml(u.displayName)}</div>
-          <div class="user-meta">@${escHtml(u.username)} · Deactivated</div>
+          <div class="user-name">${escHtml(u.displayName)} ${roleBadge(u.role)}</div>
+          <div class="user-meta">${escHtml(u.email || u.username || 'no email')} · Deactivated</div>
         </div>
       </div>`;
     });
@@ -62,21 +69,26 @@ function toggleAddUser() {
   if (!showAddUser) { el.style.display = 'none'; return; }
   el.style.display = 'block';
   el.innerHTML = `<div class="card" style="margin-bottom:14px">
-    <div class="ctitle">New Staff Member</div>
+    <div class="ctitle">New Team Member</div>
     <div style="display:flex;gap:8px">
       <div style="flex:1">
         <div class="flbl">Display Name *</div>
         <input type="text" id="nuName" placeholder="Full name" style="width:100%">
       </div>
       <div style="flex:1">
-        <div class="flbl">Username *</div>
-        <input type="text" id="nuUsername" placeholder="Lowercase, no spaces" style="width:100%">
+        <div class="flbl">Zoho / company email *</div>
+        <input type="email" id="nuEmail" placeholder="name@techsinno.com" style="width:100%">
       </div>
     </div>
     <div style="display:flex;gap:8px">
       <div style="flex:1">
-        <div class="flbl">Email</div>
-        <input type="email" id="nuEmail" placeholder="Optional" style="width:100%">
+        <div class="flbl">Access Level</div>
+        <select id="nuRole" style="width:100%">
+          <option value="staff">Staff - assigned tasks/job cards only</option>
+          <option value="viewer">View-only - assigned work only</option>
+          <option value="manager">Manager - operations, CRM, quotes</option>
+          <option value="owner">Owner - full access including bookkeeping/settings</option>
+        </select>
       </div>
       <div style="flex:1">
         <div class="flbl">Initial Password *</div>
@@ -87,19 +99,19 @@ function toggleAddUser() {
       <button class="btn" onclick="submitAddUser()">Create User</button>
       <button class="btn bo" onclick="showAddUser=false;document.getElementById('addUserForm').style.display='none'">Cancel</button>
     </div>
-    <div style="font-size:10px;color:var(--text3);margin-top:8px">User will be required to change password on first login.</div>
+    <div style="font-size:10px;color:var(--text3);margin-top:8px">User logs in with their company email and must change password on first login.</div>
   </div>`;
 }
 
 async function submitAddUser() {
   const displayName = document.getElementById('nuName').value.trim();
-  const username = document.getElementById('nuUsername').value.trim();
   const email = document.getElementById('nuEmail').value.trim();
   const password = document.getElementById('nuPassword').value;
+  const role = document.getElementById('nuRole').value;
 
-  if (!displayName || !username || !password) { ntf('Name, username, and password are required'); return; }
+  if (!displayName || !email || !password) { ntf('Name, company email, and password are required'); return; }
 
-  const data = await apiPost('/users', { displayName, username, email, password, role: 'staff' });
+  const data = await apiPost('/users', { displayName, username: email, email, password, role });
   if (data && data.user) {
     ntf(`User "${displayName}" created`);
     showAddUser = false;
@@ -118,13 +130,21 @@ function renderEditForm(user) {
         <input type="text" id="eu-name-${user.id}" value="${escHtml(user.displayName)}" style="width:100%">
       </div>
       <div style="flex:1">
-        <div class="flbl">Email</div>
+        <div class="flbl">Company Email</div>
         <input type="email" id="eu-email-${user.id}" value="${escHtml(user.email || '')}" style="width:100%">
       </div>
     </div>
-    <div style="flex:1">
-      <div class="flbl">Reset Password (leave blank to keep current)</div>
-      <input type="text" id="eu-pw-${user.id}" placeholder="New password" style="width:100%">
+    <div style="display:flex;gap:8px">
+      <div style="flex:1">
+        <div class="flbl">Access Level</div>
+        <select id="eu-role-${user.id}" style="width:100%">
+          ${['owner','manager','staff','viewer'].map(r => `<option value="${r}" ${user.role === r ? 'selected' : ''}>${roleLabel(r)}</option>`).join('')}
+        </select>
+      </div>
+      <div style="flex:1">
+        <div class="flbl">Reset Password (leave blank to keep current)</div>
+        <input type="text" id="eu-pw-${user.id}" placeholder="New password" style="width:100%">
+      </div>
     </div>
     <div style="display:flex;gap:6px;margin-top:12px">
       <button class="btn bsm" onclick="submitEditUser('${user.id}')">Save</button>
@@ -141,7 +161,8 @@ function showEditUser(id) {
 async function submitEditUser(id) {
   const body = {
     displayName: document.getElementById('eu-name-' + id).value.trim(),
-    email: document.getElementById('eu-email-' + id).value.trim()
+    email: document.getElementById('eu-email-' + id).value.trim(),
+    role: document.getElementById('eu-role-' + id).value
   };
   const pw = document.getElementById('eu-pw-' + id).value;
   if (pw) body.resetPassword = pw;

@@ -23,17 +23,19 @@ app.http('ai-chat', {
         return badRequest('messages array is required');
       }
 
+      const managerContext = decoded.role === 'manager';
+
       const userTasks = await queryItems(
         'tasks',
-        decoded.role === 'manager'
+        managerContext
           ? 'SELECT * FROM c ORDER BY c.createdAt DESC OFFSET 0 LIMIT 50'
           : 'SELECT * FROM c WHERE c.assignedTo = @uid ORDER BY c.createdAt DESC OFFSET 0 LIMIT 20',
-        decoded.role === 'staff' ? [{ name: '@uid', value: decoded.sub }] : []
+        managerContext ? [] : [{ name: '@uid', value: decoded.sub }]
       );
 
       let crmContext = '';
       let campaignContext = '';
-      if (decoded.role === 'manager') {
+      if (managerContext) {
         try {
           const clients = await queryItems('clients', 'SELECT c.companyName, c.contactName, c.status, c.estimatedValue, c.followUpDate, c.source FROM c ORDER BY c.updatedAt DESC OFFSET 0 LIMIT 30', []);
           const statusCounts = {};
@@ -59,7 +61,7 @@ app.http('ai-chat', {
       }
 
       let systemPrompt;
-      if (decoded.role === 'manager') {
+      if (managerContext) {
         systemPrompt = `You are an AI business operations assistant built into the TECHSINNO team dashboard for Frank Muland, owner of TECHSINNO (Pty) Ltd — a mechatronics and industrial electronics company in Kuilsriver, Western Cape, South Africa.
 
 Services: industrial PCB repair, factory automation (PLC/SCADA), IoT monitoring systems.

@@ -802,6 +802,8 @@ function updDay(){
 }
 
 function go(i){
+  const ownerOnly=[3,7,15];
+  if(ownerOnly.includes(i)&&!isOwner())return;
   const mgrOnly=[1,2,3,4,5,7,8,10,11,12,15,16,17,18,19,20,21];
   if(isStaff()&&mgrOnly.includes(i))return;
   curP=i;
@@ -861,6 +863,7 @@ function rGoals(){
 function togG(i){ST.g[i].d=!ST.g[i].d;svSt();rGoals();ntf(ST.g[i].d?'Goal achieved!':'Unmarked');}
 
 async function rZoho(){
+  if (!isOwner()) return;
   const el=document.getElementById('zView');
   let cfg={connected:false};
   if(isE)cfg=await window.techsinno.getZohoConfig();
@@ -3133,6 +3136,7 @@ function renderAIHistory(){
 }
 
 async function rSettings(){
+  if (!isOwner()) return;
   rZohomailSetup(); rOdSetup();
   if (!isE) return;
   const apiEl = document.getElementById('apiBaseUrl');
@@ -3258,7 +3262,8 @@ async function manualSync(){
 
 // ─── AUTH & ROLE ──────────────────────────────────────────────────────────────
 let authUser = null;
-function isManager() { return authUser && authUser.role === 'manager'; }
+function isOwner() { return authUser && authUser.role === 'owner'; }
+function isManager() { return authUser && (authUser.role === 'manager' || authUser.role === 'owner'); }
 function isStaff() { return authUser && authUser.role === 'staff'; }
 
 async function checkAuth() {
@@ -3275,17 +3280,22 @@ async function checkAuth() {
 
 function applyRole() {
   const mgr = isManager();
+  const owner = isOwner();
   const staffOnly = [1, 2, 3, 4, 5, 7, 8, 10, 11, 12];
   staffOnly.forEach(i => {
     const el = document.getElementById('n' + i);
     if (el) el.style.display = mgr ? '' : 'none';
+  });
+  [3, 7].forEach(i => {
+    const el = document.getElementById('n' + i);
+    if (el) el.style.display = owner ? '' : 'none';
   });
   const teamSec = document.getElementById('navSecTeam');
   if (teamSec) teamSec.style.display = mgr ? '' : 'none';
   const n15 = document.getElementById('n15');
   const n16 = document.getElementById('n16');
   const n17 = document.getElementById('n17');
-  if (n15) n15.style.display = mgr ? '' : 'none';
+  if (n15) n15.style.display = owner ? '' : 'none';
   if (n16) n16.style.display = mgr ? '' : 'none';
   if (n17) n17.style.display = mgr ? '' : 'none';
   ['n18','n19','n20','n21'].forEach(id => {
@@ -3748,12 +3758,12 @@ async function submitTeamTask() {
 // ─── TEAM MANAGEMENT (p15, manager only) ──────────────────────────────────────
 
 async function rTeamMgmt() {
-  if (!isManager() || !isE) return;
+  if (!isOwner() || !isE) return;
   const el = document.getElementById('p15');
   if (!el) return;
 
   el.innerHTML = `<div style="max-width:600px">
-    <button class="btn bsm" onclick="showAddStaff()" style="margin-bottom:12px"><i class="ti ti-plus" style="font-size:11px"></i> Add Staff Member</button>
+    <button class="btn bsm" onclick="showAddStaff()" style="margin-bottom:12px"><i class="ti ti-plus" style="font-size:11px"></i> Add Team Member</button>
     <div id="addStaffArea"></div>
     <div id="teamList"><div class="spin"></div> Loading...</div>
   </div>`;
@@ -3771,9 +3781,9 @@ async function rTeamMgmt() {
         <div style="width:32px;height:32px;border-radius:50%;background:var(--brand);display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:#fff;flex-shrink:0">${esc(u.displayName.charAt(0).toUpperCase())}</div>
         <div style="flex:1">
           <div style="font-weight:500;font-size:13px">${esc(u.displayName)} <span style="font-size:9px;color:var(--text3);font-family:'DM Mono',monospace">${u.role}</span></div>
-          <div style="font-size:10px;color:var(--text3)">${u.username}${u.email ? ' · ' + u.email : ''}</div>
+          <div style="font-size:10px;color:var(--text3)">${esc(u.email || u.username || 'no company email')}</div>
         </div>
-        ${u.role !== 'manager' ? `<button class="btn bsm bo" onclick="deactivateStaff('${u.id}')" title="Deactivate"><i class="ti ti-user-minus" style="font-size:11px"></i></button>` : ''}
+        ${u.role !== 'owner' ? `<button class="btn bsm bo" onclick="deactivateStaff('${u.id}')" title="Deactivate"><i class="ti ti-user-minus" style="font-size:11px"></i></button>` : ''}
       </div>`;
     });
 
@@ -3781,7 +3791,7 @@ async function rTeamMgmt() {
     if (inactive.length) {
       h += '<div style="font-size:10px;color:var(--text3);margin:12px 0 6px;font-family:\'DM Mono\',monospace">INACTIVE</div>';
       inactive.forEach(u => {
-        h += `<div class="card" style="margin-bottom:4px;padding:8px 14px;opacity:.5"><span style="font-size:12px">${esc(u.displayName)}</span> <span style="font-size:10px;color:var(--text3)">${u.username}</span></div>`;
+        h += `<div class="card" style="margin-bottom:4px;padding:8px 14px;opacity:.5"><span style="font-size:12px">${esc(u.displayName)}</span> <span style="font-size:10px;color:var(--text3)">${esc(u.email || u.username || 'no company email')}</span></div>`;
       });
     }
 
@@ -3795,11 +3805,11 @@ function showAddStaff() {
   if (area.innerHTML) { area.innerHTML = ''; return; }
   area.innerHTML = `<div class="card" style="padding:12px;margin-bottom:10px">
     <div class="flbl">Display Name</div><input type="text" id="asName" style="width:100%" placeholder="e.g. John Smith">
-    <div class="flbl">Username</div><input type="text" id="asUser" style="width:100%" placeholder="e.g. john (lowercase)">
-    <div class="flbl">Email (optional)</div><input type="email" id="asEmail" style="width:100%">
+    <div class="flbl">Zoho / company email</div><input type="email" id="asEmail" style="width:100%" placeholder="name@techsinno.com">
+    <div class="flbl">Access Level</div><select id="asRole" style="width:100%"><option value="staff">Staff - assigned tasks/job cards only</option><option value="viewer">View-only - assigned work only</option><option value="manager">Manager - operations, CRM, quotes</option><option value="owner">Owner - full access including bookkeeping/settings</option></select>
     <div class="flbl">Initial Password</div><input type="text" id="asPwd" style="width:100%" value="Techsinno2024!">
     <div style="margin-top:8px;display:flex;gap:6px">
-      <button class="btn bsm" onclick="submitAddStaff()">Create Staff</button>
+      <button class="btn bsm" onclick="submitAddStaff()">Create User</button>
       <button class="btn bsm bo" onclick="document.getElementById('addStaffArea').innerHTML=''">Cancel</button>
     </div>
   </div>`;
@@ -3807,14 +3817,14 @@ function showAddStaff() {
 
 async function submitAddStaff() {
   const name = document.getElementById('asName').value.trim();
-  const username = document.getElementById('asUser').value.trim();
+  const email = document.getElementById('asEmail').value.trim();
   const password = document.getElementById('asPwd').value;
-  if (!name || !username || !password) { ntf('Name, username, and password required'); return; }
+  const role = document.getElementById('asRole').value;
+  if (!name || !email || !password) { ntf('Name, company email, and password required'); return; }
   const r = await window.techsinno.apiCall('POST', '/users', {
-    displayName: name, username, password,
-    email: document.getElementById('asEmail').value.trim() || undefined
+    displayName: name, username: email, email, password, role
   });
-  if (r && r.user) { ntf('Staff member created'); document.getElementById('addStaffArea').innerHTML = ''; rTeamMgmt(); }
+  if (r && r.user) { ntf('Team member created'); document.getElementById('addStaffArea').innerHTML = ''; rTeamMgmt(); }
   else ntf((r && r.error) || 'Failed to create user');
 }
 

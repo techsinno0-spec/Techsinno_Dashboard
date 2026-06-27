@@ -1,4 +1,4 @@
-async function render_dashboard() {
+﻿async function render_dashboard() {
   const el = document.getElementById('page-dashboard');
   const user = getUser();
   const role = user.role;
@@ -9,7 +9,7 @@ async function render_dashboard() {
     const tasksData = await apiGet('/tasks');
     const tasks = (tasksData && tasksData.tasks) || [];
     let sharedState = null;
-    if (role === 'manager' && typeof syncLoad === 'function') {
+    if (isManager() && typeof syncLoad === 'function') {
       try { sharedState = await syncLoad(); } catch {}
     }
     const shared = (sharedState && sharedState.data) || {};
@@ -29,7 +29,7 @@ async function render_dashboard() {
 
     let html = '';
 
-    if (role === 'manager') {
+    if (isManager()) {
       html += `<div class="wtabs manager-actions">
         <button class="wtab active" onclick="navigateTo('inboxes')"><i class="ti ti-edit" style="font-size:11px;margin-right:3px"></i>Compose</button>
         <button class="wtab" onclick="navigateTo('inboxes',{provider:'zoho_mail',navId:'mail-zoho'})"><i class="ti ti-mail" style="font-size:11px;margin-right:3px;color:#5fa8c4"></i>Zoho Mail</button>
@@ -44,7 +44,7 @@ async function render_dashboard() {
         <div class="stat" style="border-top:2px solid var(--accent)"><div class="slbl">Day of 90</div><div class="sval ca">31</div><div class="ssub">Phase 2</div></div>
         <div class="stat" style="border-top:2px solid var(--brand-mid)"><div class="slbl">Tasks done</div><div class="sval cb">${sharedTasks.length ? sharedTasks.filter(t => t.d).length : done}</div><div class="ssub">of ${sharedTasks.length || total || 26}</div></div>
         <div class="stat" style="border-top:2px solid #3fb950"><div class="slbl">Posts published</div><div class="sval cg">${sharedPosts.filter(p => p.s === 'posted' || p.status === 'posted').length}</div><div class="ssub">of ${sharedPosts.length || 12} planned</div></div>
-        <div class="stat" style="border-top:2px solid var(--brand-mid)"><div class="slbl">Net profit</div><div class="sval cg">—</div><div class="ssub">connect Zoho</div></div>
+        <div class="stat" style="border-top:2px solid var(--brand-mid)"><div class="slbl">Net profit</div><div class="sval cg">â€”</div><div class="ssub">connect Zoho</div></div>
       </div>`;
     } else {
       html += `<div class="g4">
@@ -57,7 +57,7 @@ async function render_dashboard() {
       </div>`;
     }
 
-    if (role === 'manager') {
+    if (isManager()) {
       html += `<div class="g2">
         <div class="card">
           <div class="ctitle">Phase Progress</div>
@@ -71,7 +71,7 @@ async function render_dashboard() {
         </div>
         <div class="card">
           <div class="ctitle">Today's Schedule</div>
-          <div class="ri"><div class="rt">18:30</div><div class="rxt"><strong>Check LinkedIn — reply to comments</strong></div><div class="rd">Mon–Fri</div></div>
+          <div class="ri"><div class="rt">18:30</div><div class="rxt"><strong>Check LinkedIn â€” reply to comments</strong></div><div class="rd">Monâ€“Fri</div></div>
           <div class="ri"><div class="rt">19:00</div><div class="rxt"><strong>Friday: follow up messages</strong></div><div class="rd">Fri</div></div>
           <div class="ctitle" style="margin-top:12px">Upcoming Deadlines</div>
           <div class="ri" style="background:rgba(248,81,73,.08)"><i class="ti ti-alert-circle cr"></i><div class="rxt">CIPC Annual return</div><div class="rd">Due 16 March 2027</div></div>
@@ -82,7 +82,7 @@ async function render_dashboard() {
     }
 
     html += `<div class="card">
-      <div class="ctitle">${urgentTasks.length > 0 ? '⚡' : ''} High Priority Tasks</div>`;
+      <div class="ctitle">${urgentTasks.length > 0 ? 'âš¡' : ''} High Priority Tasks</div>`;
     if (urgentTasks.length === 0) {
       html += '<div style="font-size:12px;color:var(--text3)">No high-priority tasks right now</div>';
     } else {
@@ -91,7 +91,7 @@ async function render_dashboard() {
           <div style="flex:1">
             <div style="font-size:12px;color:var(--text)">${escHtml(t.title)}</div>
             <div style="font-size:10px;color:var(--text3);margin-top:2px">
-              ${role === 'manager' ? escHtml(getUserName(t.assignedTo)) + ' · ' : ''}${t.deadline ? 'Due ' + formatDate(t.deadline) : 'No deadline'}
+              ${isManager() ? escHtml(getUserName(t.assignedTo)) + ' Â· ' : ''}${t.deadline ? 'Due ' + formatDate(t.deadline) : 'No deadline'}
             </div>
           </div>
           ${statusBadge(t.status)} ${categoryTag(t.category)}
@@ -100,7 +100,7 @@ async function render_dashboard() {
     }
     html += '</div>';
 
-    if (role === 'manager') {
+    if (isManager()) {
       html += `<div class="card">
         <div class="ctitle">Overdue Tasks</div>`;
       if (overdueTasks.length === 0) {
@@ -111,7 +111,7 @@ async function render_dashboard() {
             <div style="flex:1">
               <div style="font-size:12px;color:var(--text)">${escHtml(t.title)}</div>
               <div style="font-size:10px;color:#f85149;margin-top:2px">
-                ${escHtml(getUserName(t.assignedTo))} · Due ${formatDate(t.deadline)}
+                ${escHtml(getUserName(t.assignedTo))} Â· Due ${formatDate(t.deadline)}
               </div>
             </div>
             ${statusBadge(t.status)} ${priorityBadge(t.priority)}
@@ -121,7 +121,7 @@ async function render_dashboard() {
       html += '</div></div>';
     }
 
-    if (role === 'manager') {
+    if (isManager()) {
       html += `<div class="card" style="margin-top:14px">
         <div class="ctitle"><i class="ti ti-tool ca" style="margin-right:5px"></i>Job & Production Tasks</div>
         <div style="font-size:12px;color:var(--text3)">No tasks yet - <a href="#" onclick="navigateTo('job-cards');return false" style="color:var(--brand-mid)">add job tasks</a></div>
@@ -136,7 +136,7 @@ async function render_dashboard() {
           <div style="flex:1">
             <div style="font-size:12px;color:var(--text)">${escHtml(t.title)}</div>
             <div style="font-size:10px;color:var(--text3);margin-top:2px">
-              ${role === 'manager' ? escHtml(getUserName(t.assignedTo)) + ' · ' : ''}${categoryTag(t.category)}
+              ${isManager() ? escHtml(getUserName(t.assignedTo)) + ' Â· ' : ''}${categoryTag(t.category)}
             </div>
           </div>
           ${priorityBadge(t.priority)}

@@ -13,7 +13,7 @@ loginForm.addEventListener('submit', async (event) => {
   const username = document.getElementById('loginUser').value.trim();
   const password = document.getElementById('loginPass').value;
   if (!username || !password) {
-    loginError.textContent = 'Please enter username and password';
+    loginError.textContent = 'Please enter company email and password';
     return;
   }
 

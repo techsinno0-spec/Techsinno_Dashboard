@@ -1,6 +1,6 @@
 const { app } = require('@azure/functions');
 const { queryItems } = require('../../shared/cosmos');
-const { authenticate, jsonResponse, unauthorized, forbidden } = require('../../shared/auth');
+const { authenticate, jsonResponse, unauthorized, forbidden, isManagerOrOwner } = require('../../shared/auth');
 
 app.http('users-list', {
   methods: ['GET'],
@@ -9,7 +9,7 @@ app.http('users-list', {
   handler: async (request) => {
     const decoded = authenticate(request);
     if (!decoded) return unauthorized();
-    if (decoded.role !== 'manager') return forbidden();
+    if (!isManagerOrOwner(decoded)) return forbidden();
 
     try {
       const users = await queryItems(

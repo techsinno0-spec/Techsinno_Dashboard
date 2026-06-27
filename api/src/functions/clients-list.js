@@ -17,7 +17,7 @@ app.http('clients-list', {
       let query = 'SELECT * FROM c';
       const params = [];
 
-      if (decoded.role === 'staff') {
+      if (decoded.role === 'staff' || decoded.role === 'viewer') {
         query += ' WHERE c.assignedTo = @uid';
         params.push({ name: '@uid', value: decoded.sub });
         if (status) {

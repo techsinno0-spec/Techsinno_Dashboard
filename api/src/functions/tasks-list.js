@@ -19,7 +19,7 @@ app.http('tasks-list', {
       let query = 'SELECT * FROM c WHERE 1=1';
       const params = [];
 
-      if (decoded.role === 'staff') {
+      if (decoded.role === 'staff' || decoded.role === 'viewer') {
         query += ' AND c.assignedTo = @userId';
         params.push({ name: '@userId', value: decoded.sub });
       } else if (assignedTo) {

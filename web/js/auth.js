@@ -10,11 +10,22 @@ function getUser() {
 }
 function isManager() {
   const u = getUser();
-  return u && u.role === 'manager';
+  return u && (u.role === 'manager' || u.role === 'owner');
+}
+function isOwner() {
+  const u = getUser();
+  return u && u.role === 'owner';
 }
 function isStaff() {
   const u = getUser();
   return u && u.role === 'staff';
+}
+function canAccessRole(roles) {
+  const u = getUser();
+  if (!u) return false;
+  if (!roles || !roles.length) return true;
+  if (u.role === 'owner') return roles.includes('owner') || roles.includes('manager') || roles.includes('staff') || roles.includes('viewer');
+  return roles.includes(u.role);
 }
 function requireAuth() {
   if (!getToken() || !getUser()) {

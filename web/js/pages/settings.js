@@ -20,7 +20,7 @@ const FIELD_LABELS = {
 };
 
 async function render_settings() {
-  if (!isManager()) return;
+  if (!isOwner()) return;
   const el = document.getElementById('page-settings');
 
   let html = '<div style="max-width:680px">';

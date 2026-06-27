@@ -1,4 +1,4 @@
-let tasksFilter = 'all';
+﻿let tasksFilter = 'all';
 let tasksDetailId = null;
 let _completionTask = null;
 let _allTasks = [];
@@ -19,14 +19,14 @@ const WEB_WEEK_DEFAULTS = [
 async function render_tasks() {
   const el = document.getElementById('page-tasks');
   const role = getUser().role;
-  if (role === 'manager' && window._taskView !== 'team') {
+  if (isManager() && window._taskView !== 'team') {
     return renderWeeklyPlan();
   }
 
   el.innerHTML = '<div class="spin"></div> Loading tasks...';
 
   try {
-    if (role === 'manager' && window._taskView === 'team' && teamTasksTab === 'recurring') {
+    if (isManager() && window._taskView === 'team' && teamTasksTab === 'recurring') {
       return renderRecurringTasks(el);
     }
 
@@ -36,7 +36,7 @@ async function render_tasks() {
 
     let html = '';
 
-    if (role === 'manager' && window._taskView === 'team') {
+    if (isManager() && window._taskView === 'team') {
       html += `<div class="wtabs" style="margin-bottom:10px">
         <div class="wtab ${teamTasksTab === 'tasks' ? 'active' : ''}" onclick="teamTasksTab='tasks';render_tasks()">Individual tasks</div>
         <div class="wtab ${teamTasksTab === 'recurring' ? 'active' : ''}" onclick="teamTasksTab='recurring';render_tasks()">Recurring tasks</div>
@@ -53,7 +53,7 @@ async function render_tasks() {
     </div>`;
 
     // Create task button (manager only)
-    if (role === 'manager') {
+    if (isManager()) {
       html += `<div style="margin-bottom:14px">
         <button class="btn" onclick="showCreateTask()"><i class="ti ti-plus" style="font-size:13px"></i> Assign New Task</button>
       </div>`;
@@ -74,8 +74,8 @@ async function render_tasks() {
             <div style="flex:1">
               <div style="font-size:13px;font-weight:500;color:var(--text);${t.status === 'done' ? 'text-decoration:line-through;color:var(--text3)' : ''}">${escHtml(t.title)}</div>
               <div style="font-size:11px;color:var(--text3);margin-top:3px">
-                ${role === 'manager' ? '<i class="ti ti-user" style="font-size:11px"></i> ' + escHtml(getUserName(t.assignedTo)) + ' · ' : ''}${t.deadline ? (isOverdue ? '<span style="color:#f85149">Overdue</span> · ' : '') + 'Due ' + formatDate(t.deadline) : 'No deadline'}
-                ${t.notes && t.notes.length > 0 ? ' · <i class="ti ti-message" style="font-size:10px"></i> ' + t.notes.length : ''}
+                ${isManager() ? '<i class="ti ti-user" style="font-size:11px"></i> ' + escHtml(getUserName(t.assignedTo)) + ' Â· ' : ''}${t.deadline ? (isOverdue ? '<span style="color:#f85149">Overdue</span> Â· ' : '') + 'Due ' + formatDate(t.deadline) : 'No deadline'}
+                ${t.notes && t.notes.length > 0 ? ' Â· <i class="ti ti-message" style="font-size:10px"></i> ' + t.notes.length : ''}
               </div>
             </div>
             <div style="display:flex;gap:5px;align-items:center">
@@ -129,7 +129,7 @@ async function renderWeeklyPlan() {
         <div style="flex:1;font-size:12px;color:var(--text);${t.d ? 'text-decoration:line-through;color:var(--text3)' : ''}">${escHtml(t.x || '')}</div>
         <span class="tag ${t.g === 'repair' ? 't-r' : t.g === 'auto' ? 't-a' : t.g === 'iot' ? 't-i' : 't-ad'}">${escHtml(t.g || 'admin')}</span>
         <span class="tag t-g">${t.s === 'wknd' ? 'Wknd' : 'Eve'}</span>
-        <button class="btn bsm bo" onclick="removeWeeklyTask(${weeklyPlanWeek},${i})">×</button>
+        <button class="btn bsm bo" onclick="removeWeeklyTask(${weeklyPlanWeek},${i})">Ã—</button>
       </div>`).join('')}
       <div style="display:flex;gap:6px;margin-top:10px">
         <input id="weeklyTaskText" placeholder="Add a task..." style="flex:1">
@@ -192,9 +192,9 @@ async function renderRecurringTasks(el) {
     } else {
       html += rules.map(r => {
         const schedule = r.frequency === 'weekly'
-          ? `Weekly · day ${r.dayOfWeek}`
+          ? `Weekly Â· day ${r.dayOfWeek}`
           : r.frequency === 'monthly'
-            ? `Monthly · day ${r.dayOfMonth}`
+            ? `Monthly Â· day ${r.dayOfMonth}`
             : 'Daily';
         return `<div class="card" style="margin-bottom:8px;opacity:${r.active === false ? '.55' : '1'}">
           <div style="display:flex;align-items:flex-start;gap:10px">
@@ -202,10 +202,10 @@ async function renderRecurringTasks(el) {
               <div style="font-size:13px;font-weight:500;color:var(--text)">${escHtml(r.title)}</div>
               <div style="font-size:11px;color:var(--text3);margin-top:3px">
                 <i class="ti ti-repeat" style="font-size:10px"></i> ${escHtml(schedule)}
-                · ${escHtml(getUserName(r.assignedTo))}
-                · ${escHtml(r.category || 'general')}
-                · ${escHtml(r.priority || 'medium')}
-                ${r.active === false ? ' · paused' : ''}
+                Â· ${escHtml(getUserName(r.assignedTo))}
+                Â· ${escHtml(r.category || 'general')}
+                Â· ${escHtml(r.priority || 'medium')}
+                ${r.active === false ? ' Â· paused' : ''}
               </div>
             </div>
             <button class="btn bsm bo" onclick="toggleRecurringTask('${r.id}',${r.active === false})">${r.active === false ? 'Resume' : 'Pause'}</button>
@@ -307,7 +307,7 @@ function renderTaskDetail(id, task) {
   }
 
   html += `<div style="font-size:11px;color:var(--text3);margin-bottom:10px">
-    Created ${formatDateTime(task.createdAt)}${task.completedAt ? ' · Completed ' + formatDateTime(task.completedAt) : ''}
+    Created ${formatDateTime(task.createdAt)}${task.completedAt ? ' Â· Completed ' + formatDateTime(task.completedAt) : ''}
   </div>`;
 
   // Status change
@@ -323,7 +323,7 @@ function renderTaskDetail(id, task) {
   if (task.notes && task.notes.length > 0) {
     task.notes.forEach(n => {
       html += `<div class="note-item">
-        <div class="note-meta">${escHtml(n.authorName || getUserName(n.author))} · ${timeAgo(n.timestamp)}</div>
+        <div class="note-meta">${escHtml(n.authorName || getUserName(n.author))} Â· ${timeAgo(n.timestamp)}</div>
         <div class="note-text">${escHtml(n.text)}</div>
       </div>`;
     });
@@ -337,7 +337,7 @@ function renderTaskDetail(id, task) {
   </div>`;
 
   // Manager: reassign / delete
-  if (role === 'manager') {
+  if (isManager()) {
     html += `<div style="display:flex;gap:6px;margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
       <select id="reassign-${id}" style="flex:1">
         <option value="">Reassign to...</option>

@@ -48,7 +48,7 @@ function createWindow() {
   });
 
   const sessionUser = store.get('auth_user');
-  const hasSession = store.get('auth_token') && sessionUser?.role === 'manager';
+  const hasSession = store.get('auth_token') && ['owner', 'manager'].includes(sessionUser?.role);
   if (hasSession) {
     mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
   } else {
@@ -80,7 +80,7 @@ ipcMain.handle('auth-login', async (_, username, password) => {
     if (!apiBase) return { error: 'Cloud API URL is not configured. Add it below and try again.' };
     const res = await axios.post(`${apiBase}/api/auth/login`, { username, password }, { timeout: 15000 });
     if (res.data && res.data.token) {
-      if (res.data.user?.role !== 'manager') {
+      if (!['owner', 'manager'].includes(res.data.user?.role)) {
         return { error: 'The desktop dashboard is restricted to manager accounts.' };
       }
       store.set('auth_token', res.data.token);
