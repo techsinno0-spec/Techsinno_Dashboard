@@ -105,6 +105,7 @@ contextBridge.exposeInMainWorld('techsinno', {
   // Job cards
   zohoGetQuotes:     ()           => ipcRenderer.invoke('zoho-get-quotes'),
   jobCardCreate:     (opts)       => ipcRenderer.invoke('job-card-create', opts),
+  jobCardCreateManual:(payload)   => ipcRenderer.invoke('job-card-create-manual', payload),
   jobCardsGet:       ()           => ipcRenderer.invoke('job-cards-get'),
   jobCardDelete:     (id)         => ipcRenderer.invoke('job-card-delete', id),
 });

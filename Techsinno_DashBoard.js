@@ -2396,6 +2396,35 @@ SA suppliers: RS Components SA (rsonline.co.za), Micro Robotics (robotics.org.za
   } catch(e) { return { error: e.message }; }
 });
 
+ipcMain.handle('job-card-create-manual', async (_, payload = {}) => {
+  try {
+    const title = String(payload.title || '').trim();
+    const clientName = String(payload.clientName || '').trim();
+    if (!title) return { error: 'Job title is required.' };
+    if (!clientName) return { error: 'Client name is required.' };
+
+    const body = {
+      title,
+      description: String(payload.description || '').trim(),
+      clientName,
+      clientContact: String(payload.clientContact || '').trim(),
+      site: String(payload.site || '').trim(),
+      assignedTo: Array.isArray(payload.assignedTo) ? payload.assignedTo : []
+    };
+
+    const cloud = await cloudApi('POST', '/job-cards', body);
+    const card = cloud.jobCard || cloud.card;
+    if (!card) return { error: 'Cloud did not return the created job card.' };
+
+    const cards = store.get('job_cards', []).filter(c => c.id !== card.id);
+    cards.unshift(card);
+    store.set('job_cards', cards);
+    return { success: true, card };
+  } catch(e) {
+    return { error: 'Cloud job-card sync failed. Job card was not saved: ' + e.message };
+  }
+});
+
 ipcMain.handle('job-cards-get', async () => {
   try {
     const data = await cloudApi('GET', '/job-cards');

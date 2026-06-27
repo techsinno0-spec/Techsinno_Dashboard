@@ -121,7 +121,8 @@ function navigateTo(pageId, opts = {}) {
   document.getElementById('pageTitle').textContent = t[0];
   document.getElementById('pageSub').textContent = t[1];
 
-  if (typeof window['render_' + pageId] === 'function') {
-    window['render_' + pageId]();
+  const renderName = 'render_' + pageId.replace(/-/g, '_');
+  if (typeof window[renderName] === 'function') {
+    window[renderName]();
   }
 }

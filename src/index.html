@@ -1373,8 +1373,68 @@ async function doDisconnect(){if(!isE)return;await window.techsinno.zohoDisconne
 function fDate(d){if(!d)return'—';const dt=new Date(d);return dt.toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric'});}
 
 async function rComms(){
-  if(!isE){document.getElementById('zohomailView').innerHTML='<div style="color:var(--text3);font-size:12px">Run as Electron app.</div>';return;}
-  rZohoMail();rGmail();rOutlook();rLiComm();rTpls();
+  const el=document.getElementById('p8');
+  if(!el)return;
+  el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:8px;flex-wrap:wrap">
+    <div style="font-size:12px;color:var(--text2)">Website request intake only: quote requests, meeting requests, support/repair requests, and general enquiries.</div>
+    <button class="btn bo bsm" onclick="go(7)"><i class="ti ti-settings" style="font-size:12px"></i> Open Settings for integrations</button>
+  </div>
+  <div class="card" style="margin-bottom:14px">
+    <div class="ctitle"><i class="ti ti-inbox" style="color:var(--brand-mid);margin-right:5px"></i>New web request</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <div><div class="flbl">Request type</div><select id="webReqType" style="width:100%"><option value="Quote request">Quote request</option><option value="Meeting request">Meeting request</option><option value="Support / repair">Support / repair</option><option value="General enquiry">General enquiry</option></select></div>
+      <div><div class="flbl">Priority</div><select id="webReqPriority" style="width:100%"><option value="medium">Medium</option><option value="high">High</option><option value="low">Low</option></select></div>
+      <div><div class="flbl">Name / company</div><input id="webReqName" type="text" placeholder="Customer name" style="width:100%"></div>
+      <div><div class="flbl">Email / phone</div><input id="webReqContact" type="text" placeholder="email or phone" style="width:100%"></div>
+      <div><div class="flbl">Requested date</div><input id="webReqDate" type="date" style="width:100%"></div>
+      <div><div class="flbl">Requested time</div><input id="webReqTime" type="time" style="width:100%"></div>
+    </div>
+    <div class="flbl">Message / scope</div>
+    <textarea id="webReqMessage" placeholder="What does the client need?" style="width:100%;min-height:90px;box-sizing:border-box;margin-bottom:10px"></textarea>
+    <div style="display:flex;justify-content:flex-end"><button class="btn" onclick="submitElectronWebRequest()"><i class="ti ti-send" style="font-size:12px"></i> Save request</button></div>
+  </div>
+  <div class="card">
+    <div class="ctitle">Where did the settings go?</div>
+    <div style="font-size:12px;color:var(--text2);line-height:1.7">
+      Mail, Zoho, LinkedIn, API keys, templates and integration setup are now kept in <a href="#" onclick="go(7)" style="color:var(--brand-mid)">Settings</a>.
+      Communications is only for incoming business requests from the website, such as quote and meeting requests.
+    </div>
+  </div>`;
+}
+
+async function submitElectronWebRequest(){
+  if(!isE){ntf('Run as Electron app');return;}
+  const type=document.getElementById('webReqType').value;
+  const name=document.getElementById('webReqName').value.trim();
+  const contact=document.getElementById('webReqContact').value.trim();
+  const message=document.getElementById('webReqMessage').value.trim();
+  const priority=document.getElementById('webReqPriority').value;
+  const requestedDate=document.getElementById('webReqDate').value;
+  const requestedTime=document.getElementById('webReqTime').value;
+  if(!name){ntf('Name / company is required');return;}
+  if(!message){ntf('Message / scope is required');return;}
+  const body={
+    name,
+    email: contact.includes('@') ? contact : '',
+    phone: contact.includes('@') ? '' : contact,
+    source: 'website request',
+    status: type==='Quote request' ? 'qualified' : 'new',
+    notes: `${type}${requestedDate ? ' · '+requestedDate : ''}${requestedTime ? ' '+requestedTime : ''}\n\n${message}`,
+    priority
+  };
+  const saved=await window.techsinno.apiCall('POST','/clients',body);
+  if(saved&&saved.error){ntf('Request was not saved: '+saved.error);return;}
+  if(requestedDate){
+    await window.techsinno.apiCall('POST','/reminders',{
+      title:`${type}: ${name}`,
+      description:`${contact ? contact+' · ' : ''}${message}`,
+      dueDate:requestedDate,
+      dueTime:requestedTime,
+      priority
+    });
+  }
+  ntf('Web request saved to cloud');
+  rComms();
 }
 
 // ── Outlook ──
@@ -1391,7 +1451,7 @@ async function _olLoad(){
         <div class="flbl">Client ID</div><input type="text" id="msCid" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" style="width:100%;margin-bottom:7px" value="${cfg.clientId}">
         <div class="flbl">Client Secret</div><input type="password" id="msCs" placeholder="••••••••••" style="width:100%;margin-bottom:10px">
         <div style="display:flex;gap:6px"><button class="btn bsm" onclick="msSave()">Save</button><button class="btn bo bsm" onclick="msConn()">Connect & authorise</button></div>`
-      :`<div style="font-size:12px;color:var(--text2)">Not connected — go to <a href="#" onclick="go(8)" style="color:var(--brand-mid)">Communications</a> to connect Outlook first.</div>`;
+      :`<div style="font-size:12px;color:var(--text2)">Not connected — go to <a href="#" onclick="go(7)" style="color:var(--brand-mid)">Settings</a> to connect Outlook first.</div>`;
     return;
   }
   el.innerHTML='<div style="color:var(--text3);font-size:12px;display:flex;align-items:center;gap:7px"><div class="spin"></div>Loading Outlook…</div>';
@@ -1442,7 +1502,7 @@ async function rGmailPage(){
   if(!el||!isE)return;
   const cfg=await window.techsinno.gmailGetConfig();
   if(!cfg.connected){
-    el.innerHTML=`<div class="card" style="max-width:480px"><div class="ctitle"><i class="ti ti-brand-gmail" style="color:#ea4335;margin-right:5px"></i>Connect Gmail</div><div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.7">Go to Communications page to connect Gmail first, then come back here for the smart inbox.</div><button class="btn bsm" onclick="go(8)">Go to Communications →</button></div>`;
+    el.innerHTML=`<div class="card" style="max-width:480px"><div class="ctitle"><i class="ti ti-brand-gmail" style="color:#ea4335;margin-right:5px"></i>Connect Gmail</div><div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.7">Go to Settings to connect Gmail first, then come back here for the smart inbox.</div><button class="btn bsm" onclick="go(7)">Go to Settings →</button></div>`;
     return;
   }
   el.innerHTML='<div style="color:var(--text3);font-size:12px;display:flex;align-items:center;gap:7px"><div class="spin"></div>Loading inbox…</div>';
@@ -1518,7 +1578,7 @@ async function _gmLoad(){
         <div class="flbl">Client ID</div><input type="text" id="gCid" placeholder="…apps.googleusercontent.com" style="width:100%;margin-bottom:7px" value="${cfg.clientId}">
         <div class="flbl">Client Secret</div><input type="password" id="gCs" placeholder="••••••••••" style="width:100%;margin-bottom:10px">
         <div style="display:flex;gap:6px"><button class="btn bsm" onclick="gmailSave()">Save</button><button class="btn bo bsm" onclick="gmailConn()">Connect & authorise</button></div>`
-      :`<div style="font-size:12px;color:var(--text2)">Not connected — go to <a href="#" onclick="go(8)" style="color:var(--brand-mid)">Communications</a> to connect Gmail first.</div>`;
+      :`<div style="font-size:12px;color:var(--text2)">Not connected — go to <a href="#" onclick="go(7)" style="color:var(--brand-mid)">Settings</a> to connect Gmail first.</div>`;
     return;
   }
   el.innerHTML='<div style="color:var(--text3);font-size:12px;display:flex;align-items:center;gap:7px"><div class="spin"></div>Loading Gmail…</div>';
@@ -1615,14 +1675,14 @@ async function rZohoMailPage() {
   const cfg = await window.techsinno.zohomailGetConfig();
   if (!cfg.connected) {
     el.innerHTML=`<div class="card" style="max-width:500px"><div class="ctitle"><i class="ti ti-mail" style="color:#5fa8c4;margin-right:5px"></i>Connect Zoho Mail</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.7">Go to <strong style="color:var(--text)">Communications</strong> page to connect Zoho Mail, then come back here.</div>
-      <button class="btn bsm" onclick="go(8)">Go to Communications →</button></div>`;
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.7">Go to <strong style="color:var(--text)">Settings</strong> to connect Zoho Mail, then come back here.</div>
+      <button class="btn bsm" onclick="go(7)">Go to Settings →</button></div>`;
     return;
   }
   el.innerHTML='<div style="color:var(--text3);font-size:12px;display:flex;align-items:center;gap:7px"><div class="spin"></div>Loading inbox…</div>';
   let data;
   try { data = await window.techsinno.zohomailGetInbox(); } catch(e) { data = { error: e.message || 'Connection failed' }; }
-  if (!data || data.error) { el.innerHTML=`<div style="color:#f85149;font-size:12px;margin-bottom:8px"><i class="ti ti-alert-circle" style="margin-right:4px"></i>Could not load Zoho Mail</div><div style="font-size:11px;color:var(--text2);margin-bottom:8px">This is usually a region mismatch. Go to Communications to disconnect and reconnect with the correct region (South Africa uses <strong>zoho.eu</strong>).</div><button class="btn bsm" onclick="go(8)">Go to Communications →</button>`; return; }
+  if (!data || data.error) { el.innerHTML=`<div style="color:#f85149;font-size:12px;margin-bottom:8px"><i class="ti ti-alert-circle" style="margin-right:4px"></i>Could not load Zoho Mail</div><div style="font-size:11px;color:var(--text2);margin-bottom:8px">This is usually a region mismatch. Go to Settings to disconnect and reconnect with the correct region (South Africa uses <strong>zoho.eu</strong>).</div><button class="btn bsm" onclick="go(7)">Go to Settings →</button>`; return; }
   const flagBadge = { urgent:'<span style="background:rgba(248,81,73,.15);color:#f85149;font-size:9px;padding:2px 7px;border-radius:20px;font-family:\'DM Mono\',monospace">URGENT</span>', lead:'<span style="background:rgba(63,185,80,.15);color:#3fb950;font-size:9px;padding:2px 7px;border-radius:20px;font-family:\'DM Mono\',monospace">LEAD</span>', reply:'<span style="background:rgba(244,163,0,.15);color:var(--accent);font-size:9px;padding:2px 7px;border-radius:20px;font-family:\'DM Mono\',monospace">REPLY</span>' };
   el.innerHTML=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
     <div style="font-size:12px;color:var(--text2)">${data.email}</div>
@@ -1746,7 +1806,7 @@ async function _zmLoad() {
         <div class="flbl">Client ID</div><input type="text" id="zmCid" placeholder="1000.XXXXXXXXXX" style="width:100%;margin-bottom:7px" value="${cfg.clientId}">
         <div class="flbl">Client Secret</div><input type="password" id="zmCs" placeholder="••••••••••" style="width:100%;margin-bottom:10px">
         <div style="display:flex;gap:6px"><button class="btn bsm" onclick="zohomailSave()">Save</button><button class="btn bo bsm" onclick="zohomailConn()">Connect & authorise</button></div>`
-      : `<div style="font-size:12px;color:var(--text2)">Not connected — go to <a href="#" onclick="go(8)" style="color:var(--brand-mid)">Communications</a> to connect Zoho Mail first.</div>`;
+      : `<div style="font-size:12px;color:var(--text2)">Not connected — go to <a href="#" onclick="go(7)" style="color:var(--brand-mid)">Settings</a> to connect Zoho Mail first.</div>`;
     el.innerHTML = setupMsg; return;
   }
   el.innerHTML='<div style="color:var(--text3);font-size:12px;display:flex;align-items:center;gap:7px"><div class="spin"></div>Loading Zoho Mail…</div>';
@@ -1821,7 +1881,7 @@ async function rAllInboxes(){ rZohoMailPage(); rInboxGmail(); rInboxOutlook(); }
 async function rInboxGmail(){
   const el=document.getElementById('inboxGmailView');if(!el||!isE)return;
   const cfg=await window.techsinno.gmailGetConfig();
-  if(!cfg.connected){el.innerHTML='<div style="font-size:12px;color:var(--text3)">Not connected — go to <a href="#" onclick="go(8)" style="color:var(--brand-mid)">Communications</a> to connect Gmail.</div>';return;}
+  if(!cfg.connected){el.innerHTML='<div style="font-size:12px;color:var(--text3)">Not connected — go to <a href="#" onclick="go(7)" style="color:var(--brand-mid)">Settings</a> to connect Gmail.</div>';return;}
   el.innerHTML='<div style="color:var(--text3);font-size:12px;display:flex;align-items:center;gap:6px"><div class="spin"></div>Loading…</div>';
   const data=await window.techsinno.gmailGetInbox();
   if(data.error){el.innerHTML=`<div style="color:#f85149;font-size:12px">Error: ${data.error}</div>`;return;}
@@ -1840,7 +1900,7 @@ async function rInboxGmail(){
 async function rInboxOutlook(){
   const el=document.getElementById('inboxOutlookView');if(!el||!isE)return;
   const cfg=await window.techsinno.msGetConfig();
-  if(!cfg.connected){el.innerHTML='<div style="font-size:12px;color:var(--text3)">Not connected — go to <a href="#" onclick="go(8)" style="color:var(--brand-mid)">Communications</a> to connect Outlook.</div>';return;}
+  if(!cfg.connected){el.innerHTML='<div style="font-size:12px;color:var(--text3)">Not connected — go to <a href="#" onclick="go(7)" style="color:var(--brand-mid)">Settings</a> to connect Outlook.</div>';return;}
   el.innerHTML='<div style="color:var(--text3);font-size:12px;display:flex;align-items:center;gap:6px"><div class="spin"></div>Loading…</div>';
   const data=await window.techsinno.msGetInbox();
   if(data.error){el.innerHTML=`<div style="color:#f85149;font-size:12px">Error: ${data.error}</div>`;return;}
@@ -2483,7 +2543,22 @@ function renderJobCardsHtml() {
 
   const cardRows = _jobCards.length ? _jobCards.map(c => {
     const isExp = _expandedCard === c.id;
-    const partsHtml = (c.partsNeeded||[]).map(p => `
+    const title = c.jobTitle || c.title || '(untitled)';
+    const clientName = c.client || c.clientName || '—';
+    const total = c.docTotal || c.estimatedValue || 0;
+    const date = c.docDate || (c.createdAt ? new Date(c.createdAt).toLocaleDateString('en-ZA') : '');
+    const cardLabel = c.docNumber ? `${c.docType==='estimate'?'QUOTE':'INVOICE'} ${c.docNumber}` : (c.jobNumber || 'MANUAL JOB');
+    const summary = c.summary || c.description || '';
+    const approach = c.approach || '';
+    const parts = c.partsNeeded || (c.parts||[]).map(p => ({
+      item: p.name || p.item || 'Part / material',
+      spec: p.note || p.spec || '',
+      qty: p.qty || 1,
+      estimatedCostZAR: p.estimatedCostZAR || p.cost || 0,
+      saSuppliers: p.saSuppliers || []
+    }));
+    const laborSteps = c.laborSteps || (c.tasks||[]).map(t => t.title || t.description || String(t)).filter(Boolean);
+    const partsHtml = parts.map(p => `
       <div style="padding:7px 9px;background:var(--bg4);border-radius:var(--radius-sm);margin-bottom:5px">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
           <div style="flex:1">
@@ -2495,7 +2570,7 @@ function renderJobCardsHtml() {
         </div>
       </div>`).join('') || '<div style="font-size:11px;color:var(--text3)">No parts identified</div>';
 
-    const stepsHtml = (c.laborSteps||[]).map((s,i) => `<div style="font-size:11px;color:var(--text2);padding:4px 0;border-bottom:1px solid var(--border);display:flex;gap:8px"><span style="color:var(--text3);font-family:'DM Mono',monospace;flex-shrink:0">${i+1}.</span>${s}</div>`).join('');
+    const stepsHtml = laborSteps.map((s,i) => `<div style="font-size:11px;color:var(--text2);padding:4px 0;border-bottom:1px solid var(--border);display:flex;gap:8px"><span style="color:var(--text3);font-family:'DM Mono',monospace;flex-shrink:0">${i+1}.</span>${s}</div>`).join('');
 
     const outsourceHtml = (c.outsourceOptions||[]).filter(o=>o.task).map(o => `
       <div style="padding:7px 9px;background:rgba(163,113,247,.08);border:1px solid rgba(163,113,247,.2);border-radius:var(--radius-sm);margin-bottom:5px">
@@ -2509,12 +2584,12 @@ function renderJobCardsHtml() {
       <div style="padding:11px 13px;cursor:pointer;display:flex;align-items:flex-start;justify-content:space-between;gap:8px" onclick="toggleJobCard('${c.id}')">
         <div style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:7px;margin-bottom:3px;flex-wrap:wrap">
-            <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text3)">${c.docType==='estimate'?'QUOTE':'INVOICE'} ${c.docNumber}</span>
+            <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text3)">${cardLabel}</span>
             <span style="font-size:10px;padding:1px 7px;border-radius:10px;background:rgba(0,0,0,.2);color:${priorityColor[c.priority]||'var(--text3)'}">${c.priority||'medium'}</span>
             ${(c.tags||[]).slice(0,3).map(t=>`<span style="font-size:10px;padding:1px 6px;border-radius:10px;background:rgba(95,168,196,.1);color:var(--brand-mid)">${t}</span>`).join('')}
           </div>
-          <div style="font-size:13px;font-weight:500;color:var(--text)">${c.jobTitle||'(untitled)'}</div>
-          <div style="font-size:11px;color:var(--text2);margin-top:2px">${c.client} · R${(c.docTotal||0).toLocaleString()} · ${c.docDate}</div>
+          <div style="font-size:13px;font-weight:500;color:var(--text)">${title}</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:2px">${clientName} · ${total ? 'R'+total.toLocaleString()+' · ' : ''}${date}</div>
         </div>
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
           <span style="font-size:18px;color:var(--text3)">${isExp?'▲':'▼'}</span>
@@ -2522,8 +2597,8 @@ function renderJobCardsHtml() {
         </div>
       </div>
       ${isExp ? `<div style="padding:0 13px 13px;border-top:1px solid var(--border)">
-        <div style="font-size:12px;color:var(--text2);line-height:1.6;margin:10px 0">${c.summary||''}</div>
-        <div style="font-size:12px;color:var(--text2);background:var(--bg4);padding:9px 11px;border-radius:var(--radius-sm);line-height:1.6;margin-bottom:12px"><strong style="color:var(--text)">Approach:</strong> ${c.approach||''}</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.6;margin:10px 0">${summary}</div>
+        ${approach?`<div style="font-size:12px;color:var(--text2);background:var(--bg4);padding:9px 11px;border-radius:var(--radius-sm);line-height:1.6;margin-bottom:12px"><strong style="color:var(--text)">Approach:</strong> ${approach}</div>`:''}
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
           <div style="background:var(--bg4);padding:9px 11px;border-radius:var(--radius-sm);text-align:center">
@@ -2532,7 +2607,7 @@ function renderJobCardsHtml() {
           </div>
           <div style="background:var(--bg4);padding:9px 11px;border-radius:var(--radius-sm);text-align:center">
             <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace">TOTAL COST</div>
-            <div style="font-size:20px;font-weight:600;color:#3fb950">R${(cb.total||c.docTotal||0).toLocaleString()}</div>
+            <div style="font-size:20px;font-weight:600;color:#3fb950">${(cb.total||total) ? 'R'+(cb.total||total).toLocaleString() : '—'}</div>
           </div>
         </div>
 
@@ -2564,6 +2639,24 @@ function renderJobCardsHtml() {
     </div>`;
   }).join('') : '<div style="font-size:12px;color:var(--text3);text-align:center;padding:20px">No job cards yet.</div>';
 
+  const manualSection = `
+  <div class="card" style="margin-bottom:12px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:500;color:var(--text)"><i class="ti ti-plus" style="margin-right:5px;color:#3fb950"></i>Add job card manually</div>
+      <button class="btn bo bsm" onclick="toggleManualJobCardForm()">Show / hide</button>
+    </div>
+    <div id="manualJobCardForm" style="display:none">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <input id="mjcTitle" type="text" placeholder="Job title *" style="font-size:12px">
+        <input id="mjcClient" type="text" placeholder="Client name *" style="font-size:12px">
+        <input id="mjcContact" type="text" placeholder="Client phone / email" style="font-size:12px">
+        <input id="mjcSite" type="text" placeholder="Site / location" style="font-size:12px">
+      </div>
+      <textarea id="mjcDesc" placeholder="Scope, fault, parts needed, notes..." style="width:100%;min-height:70px;box-sizing:border-box;margin-bottom:8px"></textarea>
+      <div style="display:flex;justify-content:flex-end"><button class="btn bsm" onclick="submitManualJobCard()"><i class="ti ti-plus" style="font-size:11px"></i> Create job card</button></div>
+    </div>
+  </div>`;
+
   const zohoSection = `
   <div class="card" style="margin-bottom:12px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
@@ -2573,13 +2666,47 @@ function renderJobCardsHtml() {
     <div id="zohoQuotesList"><div style="font-size:11px;color:var(--text3)">Click "Load from Zoho" to fetch your quotes and invoices.</div></div>
   </div>`;
 
-  return zohoSection + `<div style="font-size:11px;font-family:'DM Mono',monospace;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">My job cards (${_jobCards.length})</div>` + cardRows;
+  return manualSection + zohoSection + `<div style="font-size:11px;font-family:'DM Mono',monospace;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">My job cards (${_jobCards.length})</div>` + cardRows;
+}
+
+function refreshJobCardsPanel() {
+  const agentEl = document.getElementById('agentTabContent');
+  const jtEl = document.getElementById('jtContent');
+  if (agentEl) agentEl.innerHTML = renderJobCardsHtml();
+  if (jtEl && _jtTab === 1) jtEl.innerHTML = renderJobCardsHtml();
+}
+
+function toggleManualJobCardForm() {
+  const el = document.getElementById('manualJobCardForm');
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+async function submitManualJobCard() {
+  const title = document.getElementById('mjcTitle')?.value.trim();
+  const clientName = document.getElementById('mjcClient')?.value.trim();
+  if (!title) { ntf('Job title is required'); return; }
+  if (!clientName) { ntf('Client name is required'); return; }
+  const payload = {
+    title,
+    clientName,
+    clientContact: document.getElementById('mjcContact')?.value.trim() || '',
+    site: document.getElementById('mjcSite')?.value.trim() || '',
+    description: document.getElementById('mjcDesc')?.value.trim() || '',
+    assignedTo: []
+  };
+  const saved = await window.techsinno.jobCardCreateManual(payload);
+  if (saved && saved.error) { ntf(saved.error); return; }
+  if (saved && saved.card) {
+    _jobCards = [saved.card, ..._jobCards.filter(c => c.id !== saved.card.id)];
+    _expandedCard = saved.card.id;
+    ntf('Manual job card created');
+    refreshJobCardsPanel();
+  }
 }
 
 function toggleJobCard(id) {
   _expandedCard = _expandedCard === id ? null : id;
-  const el = document.getElementById('agentTabContent');
-  if (el) el.innerHTML = renderJobCardsHtml();
+  refreshJobCardsPanel();
 }
 
 async function loadZohoQuotes() {
@@ -2610,8 +2737,7 @@ async function createJobCard(docId, docType) {
   ntf('Job card created!');
   _jobCards.unshift(r.card);
   _expandedCard = r.card.id;
-  const el = document.getElementById('agentTabContent');
-  if (el) el.innerHTML = renderJobCardsHtml();
+  refreshJobCardsPanel();
 }
 
 async function deleteJobCard(id) {
@@ -2620,8 +2746,7 @@ async function deleteJobCard(id) {
   if (deleted && deleted.error) { ntf(deleted.error); return; }
   _jobCards = _jobCards.filter(c => c.id !== id);
   if (_expandedCard === id) _expandedCard = null;
-  const el = document.getElementById('agentTabContent');
-  if (el) el.innerHTML = renderJobCardsHtml();
+  refreshJobCardsPanel();
   ntf('Job card deleted');
 }
 
