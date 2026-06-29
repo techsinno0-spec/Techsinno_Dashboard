@@ -7,7 +7,8 @@ const SERVICES = [
   { key: 'claude', label: 'Claude AI', icon: 'ti-robot', fields: ['apiKey'], note: 'AI assistant key used for drafts, scans, suggestions, and analysis.' },
   { key: 'hunter', label: 'Hunter.io', icon: 'ti-search', fields: ['apiKey'], note: 'Email finder for outreach lead discovery.' },
   { key: 'cloudflare', label: 'Cloudflare', icon: 'ti-cloud', fields: ['apiKey', 'zoneId'], note: 'Website analytics for techsinno.com traffic.' },
-  { key: 'onedrive', label: 'OneDrive', icon: 'ti-cloud-upload', fields: ['clientId', 'clientSecret'], note: 'Optional Microsoft/OneDrive file sync and backup connection.' }
+  { key: 'onedrive', label: 'OneDrive', icon: 'ti-cloud-upload', fields: ['clientId', 'clientSecret'], note: 'Optional Microsoft/OneDrive file sync and backup connection.' },
+  { key: 'account', label: 'Account Details', icon: 'ti-building', fields: [], note: 'Company identity, primary email, and address.' }
 ];
 
 const FIELD_LABELS = {
@@ -29,13 +30,13 @@ async function render_settings() {
     <p style="color:var(--text3);font-size:12px;margin-bottom:16px">
       Manage API credentials for integrations. Secrets are stored encrypted in Azure Cosmos DB.
     </p>
-    <div id="settings-service-rows" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-bottom:18px">
+    <div id="settings-service-rows" style="max-width:680px;display:flex;flex-direction:column;gap:10px;margin-bottom:18px">
       ${SERVICES.map(renderSettingsRow).join('')}
     </div>
-    <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;letter-spacing:.08em;text-transform:uppercase;margin:16px 0 8px">
+    <div id="settings-detail-label" style="display:none;font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;letter-spacing:.08em;text-transform:uppercase;margin:16px 0 8px">
       Detailed settings
     </div>
-    <div id="settings-detail-area" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:12px;align-items:start">
+    <div id="settings-detail-area" style="max-width:680px">
       ${SERVICES.map(renderSettingsDetail).join('')}
     </div>
   `;
@@ -56,6 +57,7 @@ function renderSettingsRow(svc) {
 }
 
 function renderSettingsDetail(svc) {
+  if (svc.key === 'account') return renderAccountDetail();
   return `<div class="card" id="cfg-detail-${svc.key}" style="display:none;padding:14px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
       <i class="ti ${svc.icon}" style="font-size:16px;color:var(--brand-mid)"></i>
@@ -72,6 +74,16 @@ function renderSettingsDetail(svc) {
       <button class="btn bsm" onclick="saveServiceConfig('${svc.key}')">Save</button>
       ${['zoho_mail','gmail','outlook'].includes(svc.key) ? `<button class="btn bsm bo" onclick="connectServiceEmail('${svc.key}')">Connect / authorise</button>` : ''}
     </div>
+  </div>`;
+}
+
+function renderAccountDetail() {
+  return `<div class="card" id="cfg-detail-account" style="display:none;padding:14px">
+    <div class="ctitle"><i class="ti ti-building" style="color:var(--brand-mid);margin-right:5px"></i>Account details</div>
+    <div class="ri"><i class="ti ti-building" style="color:var(--brand-mid);font-size:13px;flex-shrink:0"></i><div><div style="font-size:12px;color:var(--text)">TECHSINNO (Pty) Ltd</div><div style="font-size:10px;color:var(--text3)">Reg: 2022/364165/07 · Tax: 9234848266</div></div></div>
+    <div class="ri"><i class="ti ti-mail" style="color:var(--brand-mid);font-size:13px;flex-shrink:0"></i><div><div style="font-size:12px;color:var(--text)">frank@techsinno.com <span style="font-size:9px;background:rgba(26,107,138,.2);color:var(--brand-mid);padding:1px 5px;border-radius:8px;font-family:'DM Mono',monospace">PRIMARY</span></div><div style="font-size:10px;color:var(--text3)">Zoho Mail · www.techsinno.com · outgoing customer mail</div></div></div>
+    <div class="ri"><i class="ti ti-brand-gmail" style="color:#ea4335;font-size:13px;flex-shrink:0"></i><div><div style="font-size:12px;color:var(--text)">techsinno0@gmail.com</div><div style="font-size:10px;color:var(--text3)">Google account · also used for Microsoft 365 / OneDrive</div></div></div>
+    <div class="ri"><i class="ti ti-map-pin" style="color:var(--brand-mid);font-size:13px;flex-shrink:0"></i><div><div style="font-size:12px;color:var(--text)">Kuilsriver, Western Cape, 7580</div><div style="font-size:10px;color:var(--text3)">6 Marais St, Unit 19, Kuilenoord Complex</div></div></div>
   </div>`;
 }
 
@@ -113,6 +125,15 @@ async function connectServiceEmail(key) {
 }
 
 async function loadServiceConfig(key) {
+  if (key === 'account') {
+    const badge = document.getElementById('cfg-status-account');
+    if (badge) {
+      badge.textContent = 'Info';
+      badge.style.background = 'var(--card-hover)';
+      badge.style.color = 'var(--text3)';
+    }
+    return;
+  }
   const badge = document.getElementById(`cfg-status-${key}`);
   try {
     const data = await apiGet(`/config/${key}`);
@@ -160,8 +181,11 @@ function toggleServiceConfig(key) {
   document.querySelectorAll('[id^="cfg-row-note-"]').forEach(el => el.style.display = 'none');
   document.querySelectorAll('[id^="cfg-detail-"]').forEach(el => el.style.display = 'none');
   document.querySelectorAll('[id^="cfg-chev-"]').forEach(el => el.style.transform = '');
+  const label = document.getElementById('settings-detail-label');
+  if (label) label.style.display = 'none';
 
   if (!visible) {
+    if (label) label.style.display = 'block';
     if (note) note.style.display = 'block';
     if (detail) {
       detail.style.display = 'block';

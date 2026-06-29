@@ -20,7 +20,6 @@ app.http('config-get', {
       if (!config) return jsonResponse({ config: { service, connected: false } });
 
       const safe = { ...config };
-      if (safe.clientSecret) safe.clientSecret = '••••••••';
       if (safe.accessToken) safe.hasAccessToken = true;
       delete safe.accessToken;
       delete safe.refreshToken;

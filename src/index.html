@@ -352,7 +352,7 @@ input:focus,select:focus{border-color:var(--brand-mid);}
     <div class="page" id="p6"></div>
     <div class="page" id="p7">
       <div style="font-size:12px;color:var(--text3);margin:0 0 14px">Manage API credentials for integrations. The rows below give quick status; the detailed editable settings remain underneath.</div>
-      <div id="settingsQuickRows" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-bottom:16px">
+      <div id="settingsQuickRows" style="max-width:680px;display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
         <div class="card" id="srow-api" style="padding:12px 14px;cursor:pointer" onclick="toggleSettingDetail('api')">
           <div style="display:flex;align-items:center;gap:8px"><i class="ti ti-server" style="color:var(--brand-mid)"></i><strong style="font-size:13px">API Backend</strong><span id="sst-api" class="badge" style="margin-left:auto;font-size:9px">Local</span><i class="ti ti-chevron-down" id="schev-api" style="color:var(--text3)"></i></div>
           <div id="sexp-api" style="display:none;margin-top:8px;color:var(--text3);font-size:11px;line-height:1.5">Electron uses this cloud URL to share data with the web dashboard.</div>
@@ -360,6 +360,18 @@ input:focus,select:focus{border-color:var(--brand-mid);}
         <div class="card" id="srow-zohomail" style="padding:12px 14px;cursor:pointer" onclick="toggleSettingDetail('zohomail')">
           <div style="display:flex;align-items:center;gap:8px"><i class="ti ti-mail" style="color:#5fa8c4"></i><strong style="font-size:13px">Zoho Mail</strong><span id="sst-zohomail" class="badge" style="margin-left:auto;font-size:9px">...</span><i class="ti ti-chevron-down" id="schev-zohomail" style="color:var(--text3)"></i></div>
           <div id="sexp-zohomail" style="display:none;margin-top:8px;color:var(--text3);font-size:11px;line-height:1.5">Primary company mailbox for customer replies and AI email scans.</div>
+        </div>
+        <div class="card" id="srow-gmail" style="padding:12px 14px;cursor:pointer" onclick="toggleSettingDetail('gmail')">
+          <div style="display:flex;align-items:center;gap:8px"><i class="ti ti-brand-gmail" style="color:#ea4335"></i><strong style="font-size:13px">Gmail</strong><span id="sst-gmail" class="badge" style="margin-left:auto;font-size:9px">...</span><i class="ti ti-chevron-down" id="schev-gmail" style="color:var(--text3)"></i></div>
+          <div id="sexp-gmail" style="display:none;margin-top:8px;color:var(--text3);font-size:11px;line-height:1.5">Google mailbox connection for shared inbox workflows.</div>
+        </div>
+        <div class="card" id="srow-outlook" style="padding:12px 14px;cursor:pointer" onclick="toggleSettingDetail('outlook')">
+          <div style="display:flex;align-items:center;gap:8px"><i class="ti ti-brand-windows" style="color:#0078d4"></i><strong style="font-size:13px">Outlook</strong><span id="sst-outlook" class="badge" style="margin-left:auto;font-size:9px">...</span><i class="ti ti-chevron-down" id="schev-outlook" style="color:var(--text3)"></i></div>
+          <div id="sexp-outlook" style="display:none;margin-top:8px;color:var(--text3);font-size:11px;line-height:1.5">Microsoft mailbox connection for shared inbox workflows.</div>
+        </div>
+        <div class="card" id="srow-linkedin" style="padding:12px 14px;cursor:pointer" onclick="toggleSettingDetail('linkedin')">
+          <div style="display:flex;align-items:center;gap:8px"><i class="ti ti-brand-linkedin" style="color:#5fa8c4"></i><strong style="font-size:13px">LinkedIn</strong><span id="sst-linkedin" class="badge" style="margin-left:auto;font-size:9px">...</span><i class="ti ti-chevron-down" id="schev-linkedin" style="color:var(--text3)"></i></div>
+          <div id="sexp-linkedin" style="display:none;margin-top:8px;color:var(--text3);font-size:11px;line-height:1.5">Company page and social publishing connection.</div>
         </div>
         <div class="card" id="srow-onedrive" style="padding:12px 14px;cursor:pointer" onclick="toggleSettingDetail('onedrive')">
           <div style="display:flex;align-items:center;gap:8px"><i class="ti ti-brand-onedrive" style="color:#0078d4"></i><strong style="font-size:13px">OneDrive</strong><span id="sst-onedrive" class="badge" style="margin-left:auto;font-size:9px">...</span><i class="ti ti-chevron-down" id="schev-onedrive" style="color:var(--text3)"></i></div>
@@ -374,16 +386,20 @@ input:focus,select:focus{border-color:var(--brand-mid);}
           <div id="sexp-zoho_books" style="display:none;margin-top:8px;color:var(--text3);font-size:11px;line-height:1.5">Bookkeeping/invoices connection. Owner-only.</div>
         </div>
         <div class="card" id="srow-claude" style="padding:12px 14px;cursor:pointer" onclick="toggleSettingDetail('claude')">
-          <div style="display:flex;align-items:center;gap:8px"><i class="ti ti-robot" style="color:var(--brand-mid)"></i><strong style="font-size:13px">Claude AI + Hunter</strong><span id="sst-claude" class="badge" style="margin-left:auto;font-size:9px">Local</span><i class="ti ti-chevron-down" id="schev-claude" style="color:var(--text3)"></i></div>
-          <div id="sexp-claude" style="display:none;margin-top:8px;color:var(--text3);font-size:11px;line-height:1.5">AI assistant and outreach lead-finding keys.</div>
+          <div style="display:flex;align-items:center;gap:8px"><i class="ti ti-robot" style="color:var(--brand-mid)"></i><strong style="font-size:13px">Claude AI</strong><span id="sst-claude" class="badge" style="margin-left:auto;font-size:9px">...</span><i class="ti ti-chevron-down" id="schev-claude" style="color:var(--text3)"></i></div>
+          <div id="sexp-claude" style="display:none;margin-top:8px;color:var(--text3);font-size:11px;line-height:1.5">AI assistant key for drafts, scans, suggestions, and analysis.</div>
+        </div>
+        <div class="card" id="srow-hunter" style="padding:12px 14px;cursor:pointer" onclick="toggleSettingDetail('hunter')">
+          <div style="display:flex;align-items:center;gap:8px"><i class="ti ti-search" style="color:#f85149"></i><strong style="font-size:13px">Hunter.io</strong><span id="sst-hunter" class="badge" style="margin-left:auto;font-size:9px">...</span><i class="ti ti-chevron-down" id="schev-hunter" style="color:var(--text3)"></i></div>
+          <div id="sexp-hunter" style="display:none;margin-top:8px;color:var(--text3);font-size:11px;line-height:1.5">Email finder for outreach lead discovery.</div>
         </div>
         <div class="card" id="srow-account" style="padding:12px 14px;cursor:pointer" onclick="toggleSettingDetail('account')">
           <div style="display:flex;align-items:center;gap:8px"><i class="ti ti-building" style="color:var(--brand-mid)"></i><strong style="font-size:13px">Account Details</strong><span class="badge" style="margin-left:auto;font-size:9px">Info</span><i class="ti ti-chevron-down" id="schev-account" style="color:var(--text3)"></i></div>
           <div id="sexp-account" style="display:none;margin-top:8px;color:var(--text3);font-size:11px;line-height:1.5">Company identity, primary email, and address.</div>
         </div>
       </div>
-      <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;letter-spacing:.08em;text-transform:uppercase;margin:16px 0 8px">Detailed settings</div>
-      <div class="card" id="setting-detail-api" style="margin-bottom:14px">
+      <div id="settingsDetailLabel" style="display:none;font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;letter-spacing:.08em;text-transform:uppercase;margin:16px 0 8px">Detailed settings</div>
+      <div class="card" id="setting-detail-api" style="display:none;margin-bottom:14px">
         <div class="ctitle"><i class="ti ti-server" style="color:var(--brand-mid);margin-right:5px"></i>API Connection — Team Dashboard Backend</div>
         <div style="font-size:12px;color:var(--text2);margin-bottom:8px;line-height:1.6">Set the URL of your Azure Static Web App (e.g. <strong style="color:var(--text)">https://your-app.azurestaticapps.net</strong>).</div>
         <div class="flbl">API Base URL</div>
@@ -391,15 +407,35 @@ input:focus,select:focus{border-color:var(--brand-mid);}
         <button class="btn bsm" onclick="saveApiUrl()">Save</button>
         <span id="apiUrlStatus" style="font-size:11px;color:var(--text3);margin-left:8px"></span>
       </div>
-      <div class="card" id="setting-detail-zohomail" style="margin-bottom:14px">
+      <div class="card" id="setting-detail-zohomail" style="display:none;margin-bottom:14px">
         <div class="ctitle"><i class="ti ti-mail" style="color:#5fa8c4;margin-right:5px"></i>Zoho Mail — frank@techsinno.com</div>
         <div id="zohomailSetup"><div style="color:var(--text3);font-size:12px">Loading…</div></div>
       </div>
-      <div class="card" id="setting-detail-onedrive" style="margin-bottom:14px">
+      <div class="card" id="setting-detail-gmail" style="display:none;margin-bottom:14px">
+        <div class="ctitle"><i class="ti ti-brand-gmail" style="color:#ea4335;margin-right:5px"></i>Gmail</div>
+        <div class="flbl">Client ID</div><input type="text" id="setGCid" placeholder="…apps.googleusercontent.com" style="width:100%;margin-bottom:8px">
+        <div class="flbl">Client Secret</div><input type="password" id="setGCs" placeholder="••••••••" style="width:100%;margin-bottom:10px">
+        <div style="display:flex;gap:6px"><button class="btn bsm" onclick="settingsGmailSave()">Save</button><button class="btn bo bsm" onclick="settingsGmailConn()">Connect & authorise</button></div>
+      </div>
+      <div class="card" id="setting-detail-outlook" style="display:none;margin-bottom:14px">
+        <div class="ctitle"><i class="ti ti-brand-windows" style="color:#0078d4;margin-right:5px"></i>Outlook</div>
+        <div class="flbl">Client ID</div><input type="text" id="setMsCid" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" style="width:100%;margin-bottom:8px">
+        <div class="flbl">Client Secret</div><input type="password" id="setMsCs" placeholder="••••••••" style="width:100%;margin-bottom:10px">
+        <div style="display:flex;gap:6px"><button class="btn bsm" onclick="settingsMsSave()">Save</button><button class="btn bo bsm" onclick="settingsMsConn()">Connect & authorise</button></div>
+      </div>
+      <div class="card" id="setting-detail-linkedin" style="display:none;margin-bottom:14px">
+        <div class="ctitle"><i class="ti ti-brand-linkedin" style="color:#5fa8c4;margin-right:5px"></i>LinkedIn</div>
+        <div class="flbl">Client ID</div><input type="text" id="setLCid" placeholder="86xxxxx" style="width:100%;margin-bottom:8px">
+        <div class="flbl">Client Secret</div><input type="password" id="setLCs" placeholder="••••••••" style="width:100%;margin-bottom:8px">
+        <div class="flbl">Company numeric ID</div><input type="text" id="setLOid" placeholder="12345678" style="width:100%;margin-bottom:8px">
+        <div class="flbl">Personal profile URL</div><input type="text" id="setLPu" placeholder="https://www.linkedin.com/in/your-name" style="width:100%;margin-bottom:10px">
+        <div style="display:flex;gap:6px"><button class="btn bsm" onclick="settingsLiSave()">Save</button><button class="btn bo bsm" onclick="settingsLiConn()">Connect & authorise</button></div>
+      </div>
+      <div class="card" id="setting-detail-onedrive" style="display:none;margin-bottom:14px">
         <div class="ctitle"><i class="ti ti-brand-onedrive" style="color:#0078d4;margin-right:5px"></i>OneDrive sync — TECHSINNO account</div>
         <div id="odSetup"></div>
       </div>
-      <div class="card" id="setting-detail-cloudflare" style="margin-bottom:14px">
+      <div class="card" id="setting-detail-cloudflare" style="display:none;margin-bottom:14px">
         <div class="ctitle"><i class="ti ti-chart-area" style="color:#f6821f;margin-right:5px"></i>Cloudflare Analytics — techsinno.com traffic</div>
         <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.6">Get your API token from <strong style="color:var(--text)">dash.cloudflare.com</strong> → Profile → API Tokens → Create Token → "Read analytics" template. Your Zone ID is on the website's overview page (right sidebar).</div>
         <div class="flbl">API Token</div>
@@ -411,8 +447,8 @@ input:focus,select:focus{border-color:var(--brand-mid);}
           <div id="cfStatus" style="font-size:11px;color:var(--text3)"></div>
         </div>
       </div>
-      <div class="g2">
-        <div class="card" id="setting-detail-zoho_books"><div class="ctitle">Zoho Books API credentials</div>
+      <div>
+        <div class="card" id="setting-detail-zoho_books" style="display:none;margin-bottom:14px"><div class="ctitle">Zoho Books API credentials</div>
           <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.6">Get free credentials at <strong style="color:var(--text)">api-console.zoho.com</strong> → Self Client</div>
           <div class="flbl">Client ID</div><input type="text" id="cCid" placeholder="1000.XXXXXXXXXX" style="width:100%;margin-bottom:8px">
           <div class="flbl">Client Secret</div><input type="password" id="cCs" placeholder="••••••••••••••••" style="width:100%;margin-bottom:8px">
@@ -424,13 +460,13 @@ input:focus,select:focus{border-color:var(--brand-mid);}
           </div>
           <div class="zsetup"><strong style="color:var(--text2)">Steps:</strong><br>1. api-console.zoho.com → Self Client<br>2. Scope: ZohoBooks.invoices.READ, ZohoBooks.expenses.READ, ZohoBooks.reports.READ<br>3. Copy Client ID + Secret above → Save → Connect & authorise<br>4. A browser window opens — log in with your Zoho account<br>5. Dashboard syncs automatically</div>
         </div>
-        <div class="card" id="setting-detail-claude">
+        <div class="card" id="setting-detail-claude" style="display:none;margin-bottom:14px">
           <div class="ctitle"><i class="ti ti-robot" style="color:var(--brand-mid);margin-right:5px"></i>Claude AI assistant</div>
           <div style="font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.6">Get your API key from <strong style="color:var(--text)">console.anthropic.com</strong> → API Keys → Create Key.</div>
           <div class="flbl">Anthropic API Key</div>
           <input type="password" id="aiKey" placeholder="sk-ant-…" style="width:100%;margin-bottom:10px">
           <button class="btn bsm" onclick="saveAiKey()">Save key</button>
-          <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+          <div style="display:none;margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
             <div class="ctitle" style="margin-bottom:6px"><i class="ti ti-search" style="color:#f85149;margin-right:5px"></i>Hunter.io email finder</div>
             <div style="font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.6">Finds email addresses of target companies for cold outreach. Free plan: 50 searches/month.<br>Get your key at <strong style="color:var(--text)">hunter.io</strong> → profile icon → API.</div>
             <div class="flbl">Hunter.io API Key</div>
@@ -441,7 +477,17 @@ input:focus,select:focus{border-color:var(--brand-mid);}
             </div>
           </div>
         </div>
-        <div class="card" id="setting-detail-account"><div class="ctitle">Account details</div>
+        <div class="card" id="setting-detail-hunter" style="display:none;margin-bottom:14px">
+          <div class="ctitle" style="margin-bottom:6px"><i class="ti ti-search" style="color:#f85149;margin-right:5px"></i>Hunter.io email finder</div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.6">Finds email addresses of target companies for cold outreach. Free plan: 50 searches/month.<br>Get your key at <strong style="color:var(--text)">hunter.io</strong> → profile icon → API.</div>
+          <div class="flbl">Hunter.io API Key</div>
+          <input type="password" id="hunterKeySettings" placeholder="••••••••••••••••••••••••••" style="width:100%;margin-bottom:10px">
+          <div style="display:flex;gap:7px;align-items:center">
+            <button class="btn bsm" onclick="saveHunterKeySettings()">Save key</button>
+            <div id="hunterSettingsStatus" style="font-size:11px;color:var(--text3)"></div>
+          </div>
+        </div>
+        <div class="card" id="setting-detail-account" style="display:none;margin-bottom:14px"><div class="ctitle">Account details</div>
           <div class="ri"><i class="ti ti-building" style="color:var(--brand-mid);font-size:13px;flex-shrink:0"></i><div><div style="font-size:12px;color:var(--text)">TECHSINNO (Pty) Ltd</div><div style="font-size:10px;color:var(--text3)">Reg: 2022/364165/07 · Tax: 9234848266</div></div></div>
           <div class="ri"><i class="ti ti-mail" style="color:var(--brand-mid);font-size:13px;flex-shrink:0"></i><div><div style="font-size:12px;color:var(--text)">frank@techsinno.com <span style="font-size:9px;background:rgba(26,107,138,.2);color:var(--brand-mid);padding:1px 5px;border-radius:8px;font-family:'DM Mono',monospace">PRIMARY</span></div><div style="font-size:10px;color:var(--text3)">Zoho Mail · www.techsinno.com · all outgoing customer mail sent from here</div></div></div>
           <div class="ri"><i class="ti ti-brand-gmail" style="color:#ea4335;font-size:13px;flex-shrink:0"></i><div><div style="font-size:12px;color:var(--text)">techsinno0@gmail.com</div><div style="font-size:10px;color:var(--text3)">Google account · also used for Microsoft 365 / OneDrive</div></div></div>
@@ -1398,7 +1444,7 @@ async function elSubmitSocialPost() {
   btn.innerHTML = '<i class="ti ti-send" style="font-size:12px;margin-right:4px"></i> Post Now';
 }
 
-async function saveCfg(){if(!isE){ntf('Run as Electron app');return;}await window.techsinno.saveZohoConfig({clientId:document.getElementById('cCid').value.trim(),clientSecret:document.getElementById('cCs').value.trim(),orgId:document.getElementById('cOid').value.trim()});ntf('Credentials saved');}
+async function saveCfg(){if(!isE){ntf('Run as Electron app');return;}const body={clientId:document.getElementById('cCid').value.trim(),clientSecret:document.getElementById('cCs').value.trim(),orgId:document.getElementById('cOid').value.trim()};await window.techsinno.saveZohoConfig(body);await electronCloudConfigSave('zoho_books',body);ntf('Credentials saved');refreshSettingsRows();}
 async function doConnect(){if(!isE){ntf('Run as Electron app to connect Zoho');return;}ntf('Opening Zoho auth in browser...');const r=await window.techsinno.zohoConnect();if(r.success){ntf('Zoho Books connected!');tgC('zPill','zoho-pill zc');tx('zPill','Zoho: connected');}else{ntf('Auth failed: '+(r.error||'unknown'));}}
 async function sAndC(){if(!isE){ntf('Run as Electron app');return;}await window.techsinno.saveZohoConfig({clientId:document.getElementById('z1').value.trim(),clientSecret:document.getElementById('z2').value.trim(),orgId:document.getElementById('z3').value.trim()});await doConnect();rZoho();}
 async function doDisconnect(){if(!isE)return;await window.techsinno.zohoDisconnect();zD=null;tgC('zPill','zoho-pill zd');tx('zPill','Zoho: offline');ntf('Disconnected');rZoho();}
@@ -2445,9 +2491,24 @@ async function saveHunterKey() {
   const k = document.getElementById('hunterKey')?.value?.trim();
   if (!k) { ntf('Enter your Hunter.io API key'); return; }
   await window.techsinno.hunterSaveKey(k);
+  await electronCloudConfigSave('hunter', { apiKey: k });
   const st = document.getElementById('hunterStatus');
   if (st) { st.textContent = '✓ Saved'; st.style.color = '#3fb950'; }
   ntf('Hunter.io key saved');
+  refreshSettingsRows();
+}
+
+async function saveHunterKeySettings() {
+  if (!isE) { ntf('Run as Electron app'); return; }
+  const k = document.getElementById('hunterKeySettings')?.value?.trim();
+  if (!k) { ntf('Enter your Hunter.io API key'); return; }
+  await window.techsinno.hunterSaveKey(k);
+  await electronCloudConfigSave('hunter', { apiKey: k });
+  setInputValue('hunterKey', k);
+  const st = document.getElementById('hunterSettingsStatus');
+  if (st) { st.textContent = '✓ Saved'; st.style.color = '#3fb950'; }
+  ntf('Hunter.io key saved');
+  refreshSettingsRows();
 }
 
 async function agentClearHistory() {
@@ -2946,6 +3007,7 @@ async function cfSave() {
   const zone  = document.getElementById('cfZone')?.value.trim();
   if (!token || !zone) { ntf('Enter both API token and Zone ID'); return; }
   await window.techsinno.cfSaveConfig({ apiToken: token, zoneId: zone });
+  await electronCloudConfigSave('cloudflare', { apiKey: token, zoneId: zone });
   const st = document.getElementById('cfStatus');
   if (st) { st.textContent = 'Saved — testing…'; st.style.color = 'var(--text3)'; }
   const data = await window.techsinno.cfGetTraffic();
@@ -3117,7 +3179,7 @@ function saveAiKey(){
   if(!isE){ntf('Run as Electron app');return;}
   const k=document.getElementById('aiKey').value.trim();
   if(!k){ntf('Enter a key');return;}
-  window.techsinno.claudeSaveKey(k);ntf('API key saved');
+  window.techsinno.claudeSaveKey(k);electronCloudConfigSave('claude',{apiKey:k});ntf('API key saved');refreshSettingsRows();
 }
 
 async function sendAI(){
@@ -3179,16 +3241,39 @@ function toggleSettingDetail(key) {
   const exp = document.getElementById('sexp-' + key);
   const chev = document.getElementById('schev-' + key);
   const detail = document.getElementById('setting-detail-' + key);
-  const open = exp && exp.style.display !== 'none';
+  const open = detail && detail.style.display !== 'none';
   document.querySelectorAll('[id^="sexp-"]').forEach(x => x.style.display = 'none');
   document.querySelectorAll('[id^="schev-"]').forEach(x => x.style.transform = '');
+  document.querySelectorAll('[id^="setting-detail-"]').forEach(x => x.style.display = 'none');
+  const label = document.getElementById('settingsDetailLabel');
+  if (label) label.style.display = 'none';
   if (exp) exp.style.display = open ? 'none' : 'block';
   if (chev) chev.style.transform = open ? '' : 'rotate(180deg)';
-  if (detail) {
+  if (detail && !open) {
+    if (label) label.style.display = 'block';
+    detail.style.display = 'block';
     detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
     detail.style.boxShadow = '0 0 0 1px var(--brand-mid)';
     setTimeout(() => { detail.style.boxShadow = ''; }, 900);
   }
+}
+
+async function electronCloudConfigGet(service) {
+  if (!isE || !window.techsinno?.apiCall) return null;
+  try {
+    const r = await window.techsinno.apiCall('GET', '/config/' + service);
+    return r && !r.error ? r.config : null;
+  } catch { return null; }
+}
+
+async function electronCloudConfigSave(service, body) {
+  if (!isE || !window.techsinno?.apiCall) return;
+  try { await window.techsinno.apiCall('PUT', '/config/' + service, body); } catch {}
+}
+
+function setInputValue(id, value) {
+  const el = document.getElementById(id);
+  if (el && value) el.value = value;
 }
 
 async function refreshSettingsRows() {
@@ -3202,6 +3287,18 @@ async function refreshSettingsRows() {
     setSettingBadge('zohomail', cfg.connected ? 'Connected' : (cfg.clientId ? 'Configured' : 'Not set'), cfg.connected ? 'ok' : (cfg.clientId ? 'warn' : 'neutral'));
   } catch { setSettingBadge('zohomail', 'Error', 'warn'); }
   try {
+    const cfg = await window.techsinno.gmailGetConfig();
+    setSettingBadge('gmail', cfg.connected ? 'Connected' : (cfg.clientId ? 'Configured' : 'Not set'), cfg.connected ? 'ok' : (cfg.clientId ? 'warn' : 'neutral'));
+  } catch { setSettingBadge('gmail', 'Error', 'warn'); }
+  try {
+    const cfg = await window.techsinno.msGetConfig();
+    setSettingBadge('outlook', cfg.connected ? 'Connected' : (cfg.clientId ? 'Configured' : 'Not set'), cfg.connected ? 'ok' : (cfg.clientId ? 'warn' : 'neutral'));
+  } catch { setSettingBadge('outlook', 'Error', 'warn'); }
+  try {
+    const cfg = await window.techsinno.liGetConfig();
+    setSettingBadge('linkedin', cfg.connected ? 'Connected' : (cfg.clientId ? 'Configured' : 'Not set'), cfg.connected ? 'ok' : (cfg.clientId ? 'warn' : 'neutral'));
+  } catch { setSettingBadge('linkedin', 'Error', 'warn'); }
+  try {
     const cfg = await window.techsinno.odGetConfig();
     setSettingBadge('onedrive', cfg.connected ? 'Connected' : (cfg.clientId ? 'Configured' : 'Not set'), cfg.connected ? 'ok' : (cfg.clientId ? 'warn' : 'neutral'));
   } catch { setSettingBadge('onedrive', 'Error', 'warn'); }
@@ -3213,6 +3310,20 @@ async function refreshSettingsRows() {
     const cfg = await window.techsinno.getZohoConfig();
     setSettingBadge('zoho_books', cfg.connected ? 'Connected' : (cfg.clientId ? 'Configured' : 'Not set'), cfg.connected ? 'ok' : (cfg.clientId ? 'warn' : 'neutral'));
   } catch { setSettingBadge('zoho_books', 'Error', 'warn'); }
+  try {
+    const cfg = await window.techsinno.claudeGetKey();
+    setSettingBadge('claude', cfg.key ? 'Configured' : 'Not set', cfg.key ? 'warn' : 'neutral');
+  } catch { setSettingBadge('claude', 'Error', 'warn'); }
+  try {
+    const cfg = await window.techsinno.hunterGetKey();
+    setSettingBadge('hunter', cfg.key ? 'Configured' : 'Not set', cfg.key ? 'warn' : 'neutral');
+  } catch { setSettingBadge('hunter', 'Error', 'warn'); }
+  for (const service of ['zoho_books','zoho_mail','gmail','outlook','linkedin','claude','hunter','cloudflare','onedrive']) {
+    const cloud = await electronCloudConfigGet(service);
+    if (!cloud) continue;
+    if (cloud.connected) setSettingBadge(service === 'zoho_mail' ? 'zohomail' : service, 'Connected', 'ok');
+    else if (cloud.clientId || cloud.apiKey) setSettingBadge(service === 'zoho_mail' ? 'zohomail' : service, 'Configured', 'warn');
+  }
 }
 
 async function rSettings(){
@@ -3226,6 +3337,37 @@ async function rSettings(){
   if (cfg.zoneId)   { const z = document.getElementById('cfZone');  if(z) z.value = cfg.zoneId;   }
   const st = document.getElementById('cfStatus');
   if (st && cfg.configured) st.textContent = '✓ Configured';
+  const gmailCfg = await window.techsinno.gmailGetConfig();
+  setInputValue('setGCid', gmailCfg.clientId);
+  const msCfg = await window.techsinno.msGetConfig();
+  setInputValue('setMsCid', msCfg.clientId);
+  const liCfg = await window.techsinno.liGetConfig();
+  setInputValue('setLCid', liCfg.clientId);
+  setInputValue('setLOid', liCfg.orgId);
+  setInputValue('setLPu', liCfg.personalUrl);
+  const aiCfg = await window.techsinno.claudeGetKey();
+  setInputValue('aiKey', aiCfg.key);
+  const hunterCfg = await window.techsinno.hunterGetKey();
+  setInputValue('hunterKeySettings', hunterCfg.key);
+  setInputValue('hunterKey', hunterCfg.key);
+  for (const [service, map] of Object.entries({
+    zoho_books: { clientId: 'cCid', orgId: 'cOid' },
+    zoho_mail: { clientId: 'zmsCid', region: 'zmsRegion' },
+    gmail: { clientId: 'setGCid' },
+    outlook: { clientId: 'setMsCid' },
+    linkedin: { clientId: 'setLCid', orgId: 'setLOid', personalUrl: 'setLPu' },
+    onedrive: { clientId: 'odCid' },
+    cloudflare: { apiKey: 'cfToken', zoneId: 'cfZone' },
+    claude: { apiKey: 'aiKey' },
+    hunter: { apiKey: 'hunterKeySettings' }
+  })) {
+    const cloud = await electronCloudConfigGet(service);
+    if (!cloud) continue;
+    Object.entries(map).forEach(([field, id]) => {
+      const v = cloud[field];
+      if (v && v !== '••••••••' && !String(v).includes('â€¢')) setInputValue(id, v);
+    });
+  }
   refreshSettingsRows();
 }
 
@@ -3273,9 +3415,36 @@ async function rZohomailSetup(){
     </div>`;
   }
 }
-async function zohomailSettingsSave(){ const region=document.getElementById('zmsRegion'); await window.techsinno.zohomailSaveConfig({clientId:document.getElementById('zmsCid').value.trim(),clientSecret:document.getElementById('zmsCs').value.trim(),region:region?region.value:'com'}); ntf('Saved'); }
+async function zohomailSettingsSave(){ const region=document.getElementById('zmsRegion'); const body={clientId:document.getElementById('zmsCid').value.trim(),clientSecret:document.getElementById('zmsCs').value.trim(),region:region?region.value:'com'}; await window.techsinno.zohomailSaveConfig(body); await electronCloudConfigSave('zoho_mail',body); ntf('Saved'); refreshSettingsRows(); }
 async function zohomailSettingsConn(){ await zohomailSettingsSave(); ntf('Opening Zoho auth…'); const r=await window.techsinno.zohomailConnect(); if(r.success){ntf('Zoho Mail connected!');rZohomailSetup();rZohoMail();} else {ntf('Failed: '+(r.error||'unknown'));} }
 async function zohomailSettingsDisc(){ await window.techsinno.zohomailDisconnect(); ntf('Zoho Mail disconnected'); rZohomailSetup(); }
+
+async function settingsGmailSave(){
+  const body={clientId:document.getElementById('setGCid').value.trim(),clientSecret:document.getElementById('setGCs').value.trim()};
+  await window.techsinno.gmailSaveConfig(body);
+  await electronCloudConfigSave('gmail', body);
+  ntf('Gmail saved');
+  refreshSettingsRows();
+}
+async function settingsGmailConn(){ await settingsGmailSave(); ntf('Opening Google auth…'); const r=await window.techsinno.gmailConnect(); if(r.success){ntf('Gmail connected!');refreshSettingsRows();}else ntf('Failed: '+(r.error||'unknown')); }
+
+async function settingsMsSave(){
+  const body={clientId:document.getElementById('setMsCid').value.trim(),clientSecret:document.getElementById('setMsCs').value.trim()};
+  await window.techsinno.msSaveConfig(body);
+  await electronCloudConfigSave('outlook', body);
+  ntf('Outlook saved');
+  refreshSettingsRows();
+}
+async function settingsMsConn(){ await settingsMsSave(); ntf('Opening Microsoft auth…'); const r=await window.techsinno.msConnect(); if(r.success){ntf('Outlook connected!');refreshSettingsRows();}else ntf('Failed: '+(r.error||'unknown')); }
+
+async function settingsLiSave(){
+  const body={clientId:document.getElementById('setLCid').value.trim(),clientSecret:document.getElementById('setLCs').value.trim(),orgId:document.getElementById('setLOid').value.trim(),personalUrl:document.getElementById('setLPu').value.trim()};
+  await window.techsinno.liSaveConfig(body);
+  await electronCloudConfigSave('linkedin', body);
+  ntf('LinkedIn saved');
+  refreshSettingsRows();
+}
+async function settingsLiConn(){ await settingsLiSave(); ntf('Opening LinkedIn auth…'); const r=await window.techsinno.liConnect(); if(r.success){ntf('LinkedIn connected!');refreshSettingsRows();}else ntf('Failed: '+(r.error||'unknown')); }
 
 async function rOdSetup(){
   if(!isE)return;
@@ -3303,8 +3472,11 @@ async function rOdSetup(){
   }
 }
 async function odSave(){
-  await window.techsinno.odSaveConfig({clientId:document.getElementById('odCid').value.trim(),clientSecret:document.getElementById('odCs').value.trim()});
+  const body={clientId:document.getElementById('odCid').value.trim(),clientSecret:document.getElementById('odCs').value.trim()};
+  await window.techsinno.odSaveConfig(body);
+  await electronCloudConfigSave('onedrive', body);
   ntf('Credentials saved');
+  refreshSettingsRows();
 }
 async function odConn(){
   await odSave();
