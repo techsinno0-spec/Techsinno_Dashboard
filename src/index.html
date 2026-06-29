@@ -814,7 +814,7 @@ async function svSt(){
     await window.techsinno.storeSet('tasks',ST.t);
     await window.techsinno.storeSet('goals',ST.g);
     await window.techsinno.storeSet('posts',ST.p);
-    const r=await window.techsinno.syncSave({tasks:ST.t,goals:ST.g,posts:ST.p,savedAt:new Date().toISOString()});
+    const r=await window.techsinno.syncSave({tasks:ST.t,goals:ST.g,posts:ST.p,dashboard:buildDashboardSnapshot(),savedAt:new Date().toISOString()});
     if(r&&r.success)_lastSyncSavedAt=r.savedAt||r.ts||_lastSyncSavedAt;
     updSyncPill(r);
     _syncSaving=false;
@@ -869,12 +869,52 @@ function tgC(id,cls){const e=document.getElementById(id);if(e)e.className=cls;}
 function tx(id,v){const e=document.getElementById(id);if(e)e.textContent=v;}
 function tw(id,v){const e=document.getElementById(id);if(e)e.style.width=v;}
 
+function phaseProgressValues(){
+  const d=dop();
+  return {
+    p1:d<=30?Math.round(d/30*100):100,
+    p2:d<=30?0:d<=60?Math.round((d-30)/30*100):100,
+    p3:d<=60?0:Math.round((d-60)/30*100)
+  };
+}
+
+function dashboardScheduleItems(){
+  const dow=new Date().getDay();const wknd=dow===0||dow===6;
+  return wknd?[
+    {t:'08:00',x:'Repair work / client visit',d:'Sat',c:'#D85A30'},
+    {t:'18:00',x:'Batch-write 3 LinkedIn posts',d:'Sun',c:'var(--brand-mid)'},
+    {t:'19:00',x:'Review pipeline & plan week',d:'Sun',c:'var(--brand-mid)'},
+    {t:'19:30',x:'Update tasks & sync Zoho',d:'Sun',c:'var(--text3)'}
+  ]:[
+    {t:'18:30',x:'Check LinkedIn — reply to comments',d:'Mon–Fri',c:'var(--brand-mid)'},
+    {t:'19:00',x:['Monday: write LinkedIn post draft','Tuesday: send 5 connections','Wednesday: publish post','Thursday: send 3–5 cold emails','Friday: follow up messages'][dow===1?0:dow===2?1:dow===3?2:dow===4?3:4],d:['Mon','Tue','Wed','Thu','Fri'][dow-1],c:'var(--accent)'}
+  ];
+}
+
+function buildDashboardSnapshot(){
+  const all=ST.t.flat();
+  const pp=phaseProgressValues();
+  const summary=zD&&zD.success?zD.summary:null;
+  return {
+    day:dop(),
+    phase:dop()<=30?'Phase 1':dop()<=60?'Phase 2':'Phase 3',
+    tasksDone:all.filter(t=>t.d).length,
+    tasksTotal:all.length,
+    postsPublished:ST.p.filter(p=>p.s==='posted').length,
+    postsTotal:ST.p.length,
+    phaseProgress:pp,
+    schedule:dashboardScheduleItems(),
+    zoho:summary?{summary,overdueInvoices:zD.overdueInvoices||[],recentInvoices:zD.recentInvoices||[],recentExpenses:zD.recentExpenses||[]}:null,
+    savedAt:new Date().toISOString()
+  };
+}
+
 function updDay(){
   const d=dop();
   tx('sDay',d);tx('dD',d);
   tw('gProg',Math.round(d/90*100)+'%');
   tx('dPh',d<=30?'Phase 1':d<=60?'Phase 2':'Phase 3');
-  const p1=d<=30?Math.round(d/30*100):100,p2=d<=30?0:d<=60?Math.round((d-30)/30*100):100,p3=d<=60?0:Math.round((d-60)/30*100);
+  const {p1,p2,p3}=phaseProgressValues();
   ['1','2','3'].forEach((n,i)=>{const v=[p1,p2,p3][i];tx('pp'+n,v+'%');tw('pb'+n,v+'%');});
   document.getElementById('dPill').textContent=new Date().toLocaleDateString('en-ZA',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
 }
@@ -3497,7 +3537,7 @@ async function manualSync(){
   if(!isE)return;
   const cloudEl=document.getElementById('syncPill');
   if(cloudEl){cloudEl.textContent='☁ syncing...';cloudEl.style.color='var(--accent)';}
-  const cloudResult=await window.techsinno.syncSave({tasks:ST.t,goals:ST.g,posts:ST.p,savedAt:new Date().toISOString()});
+  const cloudResult=await window.techsinno.syncSave({tasks:ST.t,goals:ST.g,posts:ST.p,dashboard:buildDashboardSnapshot(),savedAt:new Date().toISOString()});
   if(cloudResult&&cloudResult.success)_lastSyncSavedAt=cloudResult.savedAt||cloudResult.ts||_lastSyncSavedAt;
   updSyncPill(cloudResult);
   if(cloudResult&&cloudResult.success)ntf(cloudResult.source==='onedrive'?'Synced to OneDrive backup':'Synced to cloud');else ntf('Sync failed: '+(cloudResult.error||'unknown'));
@@ -3509,7 +3549,7 @@ async function manualSync(){
     return;
   }
   if(el){el.textContent='☁ syncing…';el.style.color='var(--accent)';}
-  const r=await window.techsinno.syncSave({tasks:ST.t,goals:ST.g,posts:ST.p,savedAt:new Date().toISOString()});
+  const r=await window.techsinno.syncSave({tasks:ST.t,goals:ST.g,posts:ST.p,dashboard:buildDashboardSnapshot(),savedAt:new Date().toISOString()});
   updSyncPill(r);
   if(r&&r.success)ntf('Synced to OneDrive');else ntf('Sync failed: '+(r.error||'unknown'));
 }

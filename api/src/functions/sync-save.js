@@ -37,6 +37,7 @@ app.http('sync-save', {
         posts: body.posts === undefined ? cleanArray(previous.posts) : cleanArray(body.posts),
         manualTasks: body.manualTasks === undefined ? cleanArray(previous.manualTasks) : cleanArray(body.manualTasks),
         websiteServices: body.websiteServices === undefined ? cleanObject(previous.websiteServices) : cleanObject(body.websiteServices),
+        dashboard: body.dashboard === undefined ? cleanObject(previous.dashboard) : cleanObject(body.dashboard),
         savedAt: body.savedAt || now
       };
 
