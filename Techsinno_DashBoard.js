@@ -81,7 +81,7 @@ ipcMain.handle('auth-login', async (_, username, password) => {
     const res = await axios.post(`${apiBase}/api/auth/login`, { username, password }, { timeout: 15000 });
     if (res.data && res.data.token) {
       if (!['owner', 'manager'].includes(res.data.user?.role)) {
-        return { error: 'The desktop dashboard is restricted to manager accounts.' };
+        return { error: 'The desktop dashboard is restricted to owner or manager accounts.' };
       }
       store.set('auth_token', res.data.token);
       store.set('auth_user', res.data.user);

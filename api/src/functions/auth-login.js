@@ -1,5 +1,4 @@
 const { app } = require('@azure/functions');
-const crypto = require('crypto'); // <-- ADDED (diagnostic)
 const { queryItems, replaceItem } = require('../../shared/cosmos');
 const { verifyPassword } = require('../../shared/password');
 const { signToken, jsonResponse, badRequest } = require('../../shared/auth');
@@ -22,11 +21,18 @@ app.http('auth-login', {
       if (!rateCheck.allowed) {
         return jsonResponse({ error: `Too many login attempts. Try again in ${Math.ceil(rateCheck.retryAfter / 60)} minutes.` }, 429);
       }
-      const users = await queryItems(
+      let users = await queryItems(
         'users',
         'SELECT * FROM c WHERE (c.username = @username OR c.email = @username) AND c.active = true',
         [{ name: '@username', value: cleanUsername }]
       );
+      if (users.length === 0 && cleanUsername === 'frank@techsinno.com') {
+        users = await queryItems(
+          'users',
+          'SELECT * FROM c WHERE c.username = @legacyUsername AND c.active = true',
+          [{ name: '@legacyUsername', value: 'frank' }]
+        );
+      }
       if (users.length === 0) {
         await recordFailedLogin(cleanUsername);
         return jsonResponse({ error: 'Invalid username or password' }, 401);
@@ -44,6 +50,9 @@ app.http('auth-login', {
       if (shouldBeOwner && user.role !== 'owner') {
         user.role = 'owner';
       }
+      if (shouldBeOwner && !user.email) {
+        user.email = 'frank@techsinno.com';
+      }
       await clearLoginRateLimit(cleanUsername);
       const token = signToken(user);
       user.lastLoginAt = new Date().toISOString();
@@ -51,7 +60,6 @@ app.http('auth-login', {
       await logActivity(user.id, 'login', `${user.displayName} logged in`);
       return jsonResponse({
         token,
-        _fp: crypto.createHash('sha256').update(process.env.JWT_SECRET || '').digest('hex').slice(0, 10), // <-- ADDED (diagnostic)
         user: {
           id: user.id, username: user.username, displayName: user.displayName,
           email: user.email, role: user.role, mustChangePassword: user.mustChangePassword || false
