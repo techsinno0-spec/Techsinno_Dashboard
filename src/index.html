@@ -351,7 +351,39 @@ input:focus,select:focus{border-color:var(--brand-mid);}
     </div>
     <div class="page" id="p6"></div>
     <div class="page" id="p7">
-      <div class="card" style="margin-bottom:14px">
+      <div style="font-size:12px;color:var(--text3);margin:0 0 14px">Manage API credentials for integrations. The rows below give quick status; the detailed editable settings remain underneath.</div>
+      <div id="settingsQuickRows" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-bottom:16px">
+        <div class="card" id="srow-api" style="padding:12px 14px;cursor:pointer" onclick="toggleSettingDetail('api')">
+          <div style="display:flex;align-items:center;gap:8px"><i class="ti ti-server" style="color:var(--brand-mid)"></i><strong style="font-size:13px">API Backend</strong><span id="sst-api" class="badge" style="margin-left:auto;font-size:9px">Local</span><i class="ti ti-chevron-down" id="schev-api" style="color:var(--text3)"></i></div>
+          <div id="sexp-api" style="display:none;margin-top:8px;color:var(--text3);font-size:11px;line-height:1.5">Electron uses this cloud URL to share data with the web dashboard.</div>
+        </div>
+        <div class="card" id="srow-zohomail" style="padding:12px 14px;cursor:pointer" onclick="toggleSettingDetail('zohomail')">
+          <div style="display:flex;align-items:center;gap:8px"><i class="ti ti-mail" style="color:#5fa8c4"></i><strong style="font-size:13px">Zoho Mail</strong><span id="sst-zohomail" class="badge" style="margin-left:auto;font-size:9px">...</span><i class="ti ti-chevron-down" id="schev-zohomail" style="color:var(--text3)"></i></div>
+          <div id="sexp-zohomail" style="display:none;margin-top:8px;color:var(--text3);font-size:11px;line-height:1.5">Primary company mailbox for customer replies and AI email scans.</div>
+        </div>
+        <div class="card" id="srow-onedrive" style="padding:12px 14px;cursor:pointer" onclick="toggleSettingDetail('onedrive')">
+          <div style="display:flex;align-items:center;gap:8px"><i class="ti ti-brand-onedrive" style="color:#0078d4"></i><strong style="font-size:13px">OneDrive</strong><span id="sst-onedrive" class="badge" style="margin-left:auto;font-size:9px">...</span><i class="ti ti-chevron-down" id="schev-onedrive" style="color:var(--text3)"></i></div>
+          <div id="sexp-onedrive" style="display:none;margin-top:8px;color:var(--text3);font-size:11px;line-height:1.5">Optional backup/export connection for TECHSINNO files.</div>
+        </div>
+        <div class="card" id="srow-cloudflare" style="padding:12px 14px;cursor:pointer" onclick="toggleSettingDetail('cloudflare')">
+          <div style="display:flex;align-items:center;gap:8px"><i class="ti ti-cloud" style="color:#f6821f"></i><strong style="font-size:13px">Cloudflare</strong><span id="sst-cloudflare" class="badge" style="margin-left:auto;font-size:9px">...</span><i class="ti ti-chevron-down" id="schev-cloudflare" style="color:var(--text3)"></i></div>
+          <div id="sexp-cloudflare" style="display:none;margin-top:8px;color:var(--text3);font-size:11px;line-height:1.5">Website traffic analytics for techsinno.com.</div>
+        </div>
+        <div class="card" id="srow-zoho_books" style="padding:12px 14px;cursor:pointer" onclick="toggleSettingDetail('zoho_books')">
+          <div style="display:flex;align-items:center;gap:8px"><i class="ti ti-chart-bar" style="color:var(--brand-mid)"></i><strong style="font-size:13px">Zoho Books</strong><span id="sst-zoho_books" class="badge" style="margin-left:auto;font-size:9px">...</span><i class="ti ti-chevron-down" id="schev-zoho_books" style="color:var(--text3)"></i></div>
+          <div id="sexp-zoho_books" style="display:none;margin-top:8px;color:var(--text3);font-size:11px;line-height:1.5">Bookkeeping/invoices connection. Owner-only.</div>
+        </div>
+        <div class="card" id="srow-claude" style="padding:12px 14px;cursor:pointer" onclick="toggleSettingDetail('claude')">
+          <div style="display:flex;align-items:center;gap:8px"><i class="ti ti-robot" style="color:var(--brand-mid)"></i><strong style="font-size:13px">Claude AI + Hunter</strong><span id="sst-claude" class="badge" style="margin-left:auto;font-size:9px">Local</span><i class="ti ti-chevron-down" id="schev-claude" style="color:var(--text3)"></i></div>
+          <div id="sexp-claude" style="display:none;margin-top:8px;color:var(--text3);font-size:11px;line-height:1.5">AI assistant and outreach lead-finding keys.</div>
+        </div>
+        <div class="card" id="srow-account" style="padding:12px 14px;cursor:pointer" onclick="toggleSettingDetail('account')">
+          <div style="display:flex;align-items:center;gap:8px"><i class="ti ti-building" style="color:var(--brand-mid)"></i><strong style="font-size:13px">Account Details</strong><span class="badge" style="margin-left:auto;font-size:9px">Info</span><i class="ti ti-chevron-down" id="schev-account" style="color:var(--text3)"></i></div>
+          <div id="sexp-account" style="display:none;margin-top:8px;color:var(--text3);font-size:11px;line-height:1.5">Company identity, primary email, and address.</div>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;letter-spacing:.08em;text-transform:uppercase;margin:16px 0 8px">Detailed settings</div>
+      <div class="card" id="setting-detail-api" style="margin-bottom:14px">
         <div class="ctitle"><i class="ti ti-server" style="color:var(--brand-mid);margin-right:5px"></i>API Connection — Team Dashboard Backend</div>
         <div style="font-size:12px;color:var(--text2);margin-bottom:8px;line-height:1.6">Set the URL of your Azure Static Web App (e.g. <strong style="color:var(--text)">https://your-app.azurestaticapps.net</strong>).</div>
         <div class="flbl">API Base URL</div>
@@ -359,15 +391,15 @@ input:focus,select:focus{border-color:var(--brand-mid);}
         <button class="btn bsm" onclick="saveApiUrl()">Save</button>
         <span id="apiUrlStatus" style="font-size:11px;color:var(--text3);margin-left:8px"></span>
       </div>
-      <div class="card" style="margin-bottom:14px">
+      <div class="card" id="setting-detail-zohomail" style="margin-bottom:14px">
         <div class="ctitle"><i class="ti ti-mail" style="color:#5fa8c4;margin-right:5px"></i>Zoho Mail — frank@techsinno.com</div>
         <div id="zohomailSetup"><div style="color:var(--text3);font-size:12px">Loading…</div></div>
       </div>
-      <div class="card" style="margin-bottom:14px">
+      <div class="card" id="setting-detail-onedrive" style="margin-bottom:14px">
         <div class="ctitle"><i class="ti ti-brand-onedrive" style="color:#0078d4;margin-right:5px"></i>OneDrive sync — TECHSINNO account</div>
         <div id="odSetup"></div>
       </div>
-      <div class="card" style="margin-bottom:14px">
+      <div class="card" id="setting-detail-cloudflare" style="margin-bottom:14px">
         <div class="ctitle"><i class="ti ti-chart-area" style="color:#f6821f;margin-right:5px"></i>Cloudflare Analytics — techsinno.com traffic</div>
         <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.6">Get your API token from <strong style="color:var(--text)">dash.cloudflare.com</strong> → Profile → API Tokens → Create Token → "Read analytics" template. Your Zone ID is on the website's overview page (right sidebar).</div>
         <div class="flbl">API Token</div>
@@ -380,7 +412,7 @@ input:focus,select:focus{border-color:var(--brand-mid);}
         </div>
       </div>
       <div class="g2">
-        <div class="card"><div class="ctitle">Zoho Books API credentials</div>
+        <div class="card" id="setting-detail-zoho_books"><div class="ctitle">Zoho Books API credentials</div>
           <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.6">Get free credentials at <strong style="color:var(--text)">api-console.zoho.com</strong> → Self Client</div>
           <div class="flbl">Client ID</div><input type="text" id="cCid" placeholder="1000.XXXXXXXXXX" style="width:100%;margin-bottom:8px">
           <div class="flbl">Client Secret</div><input type="password" id="cCs" placeholder="••••••••••••••••" style="width:100%;margin-bottom:8px">
@@ -392,7 +424,7 @@ input:focus,select:focus{border-color:var(--brand-mid);}
           </div>
           <div class="zsetup"><strong style="color:var(--text2)">Steps:</strong><br>1. api-console.zoho.com → Self Client<br>2. Scope: ZohoBooks.invoices.READ, ZohoBooks.expenses.READ, ZohoBooks.reports.READ<br>3. Copy Client ID + Secret above → Save → Connect & authorise<br>4. A browser window opens — log in with your Zoho account<br>5. Dashboard syncs automatically</div>
         </div>
-        <div class="card">
+        <div class="card" id="setting-detail-claude">
           <div class="ctitle"><i class="ti ti-robot" style="color:var(--brand-mid);margin-right:5px"></i>Claude AI assistant</div>
           <div style="font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.6">Get your API key from <strong style="color:var(--text)">console.anthropic.com</strong> → API Keys → Create Key.</div>
           <div class="flbl">Anthropic API Key</div>
@@ -409,7 +441,7 @@ input:focus,select:focus{border-color:var(--brand-mid);}
             </div>
           </div>
         </div>
-        <div class="card"><div class="ctitle">Account details</div>
+        <div class="card" id="setting-detail-account"><div class="ctitle">Account details</div>
           <div class="ri"><i class="ti ti-building" style="color:var(--brand-mid);font-size:13px;flex-shrink:0"></i><div><div style="font-size:12px;color:var(--text)">TECHSINNO (Pty) Ltd</div><div style="font-size:10px;color:var(--text3)">Reg: 2022/364165/07 · Tax: 9234848266</div></div></div>
           <div class="ri"><i class="ti ti-mail" style="color:var(--brand-mid);font-size:13px;flex-shrink:0"></i><div><div style="font-size:12px;color:var(--text)">frank@techsinno.com <span style="font-size:9px;background:rgba(26,107,138,.2);color:var(--brand-mid);padding:1px 5px;border-radius:8px;font-family:'DM Mono',monospace">PRIMARY</span></div><div style="font-size:10px;color:var(--text3)">Zoho Mail · www.techsinno.com · all outgoing customer mail sent from here</div></div></div>
           <div class="ri"><i class="ti ti-brand-gmail" style="color:#ea4335;font-size:13px;flex-shrink:0"></i><div><div style="font-size:12px;color:var(--text)">techsinno0@gmail.com</div><div style="font-size:10px;color:var(--text3)">Google account · also used for Microsoft 365 / OneDrive</div></div></div>
@@ -3135,6 +3167,54 @@ function renderAIHistory(){
   el.scrollTop=el.scrollHeight;
 }
 
+function setSettingBadge(key, text, state='neutral') {
+  const el = document.getElementById('sst-' + key);
+  if (!el) return;
+  el.textContent = text;
+  el.style.background = state === 'ok' ? 'rgba(63,185,80,.15)' : state === 'warn' ? 'rgba(227,179,65,.15)' : 'var(--card-hover)';
+  el.style.color = state === 'ok' ? '#3fb950' : state === 'warn' ? 'var(--accent)' : 'var(--text3)';
+}
+
+function toggleSettingDetail(key) {
+  const exp = document.getElementById('sexp-' + key);
+  const chev = document.getElementById('schev-' + key);
+  const detail = document.getElementById('setting-detail-' + key);
+  const open = exp && exp.style.display !== 'none';
+  document.querySelectorAll('[id^="sexp-"]').forEach(x => x.style.display = 'none');
+  document.querySelectorAll('[id^="schev-"]').forEach(x => x.style.transform = '');
+  if (exp) exp.style.display = open ? 'none' : 'block';
+  if (chev) chev.style.transform = open ? '' : 'rotate(180deg)';
+  if (detail) {
+    detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    detail.style.boxShadow = '0 0 0 1px var(--brand-mid)';
+    setTimeout(() => { detail.style.boxShadow = ''; }, 900);
+  }
+}
+
+async function refreshSettingsRows() {
+  if (!isE) return;
+  try {
+    const api = await window.techsinno.storeGet('api_base_url');
+    setSettingBadge('api', api ? 'Configured' : 'Local', api ? 'ok' : 'neutral');
+  } catch {}
+  try {
+    const cfg = await window.techsinno.zohomailGetConfig();
+    setSettingBadge('zohomail', cfg.connected ? 'Connected' : (cfg.clientId ? 'Configured' : 'Not set'), cfg.connected ? 'ok' : (cfg.clientId ? 'warn' : 'neutral'));
+  } catch { setSettingBadge('zohomail', 'Error', 'warn'); }
+  try {
+    const cfg = await window.techsinno.odGetConfig();
+    setSettingBadge('onedrive', cfg.connected ? 'Connected' : (cfg.clientId ? 'Configured' : 'Not set'), cfg.connected ? 'ok' : (cfg.clientId ? 'warn' : 'neutral'));
+  } catch { setSettingBadge('onedrive', 'Error', 'warn'); }
+  try {
+    const cfg = await window.techsinno.cfGetConfig();
+    setSettingBadge('cloudflare', cfg.configured ? 'Configured' : (cfg.apiToken ? 'Partial' : 'Not set'), cfg.configured ? 'ok' : (cfg.apiToken ? 'warn' : 'neutral'));
+  } catch { setSettingBadge('cloudflare', 'Error', 'warn'); }
+  try {
+    const cfg = await window.techsinno.getZohoConfig();
+    setSettingBadge('zoho_books', cfg.connected ? 'Connected' : (cfg.clientId ? 'Configured' : 'Not set'), cfg.connected ? 'ok' : (cfg.clientId ? 'warn' : 'neutral'));
+  } catch { setSettingBadge('zoho_books', 'Error', 'warn'); }
+}
+
 async function rSettings(){
   if (!isOwner()) return;
   rZohomailSetup(); rOdSetup();
@@ -3146,6 +3226,7 @@ async function rSettings(){
   if (cfg.zoneId)   { const z = document.getElementById('cfZone');  if(z) z.value = cfg.zoneId;   }
   const st = document.getElementById('cfStatus');
   if (st && cfg.configured) st.textContent = '✓ Configured';
+  refreshSettingsRows();
 }
 
 async function saveApiUrl() {
@@ -3155,6 +3236,7 @@ async function saveApiUrl() {
   if (!result || result.error) { ntf((result && result.error) || 'Invalid API URL'); return; }
   const st = document.getElementById('apiUrlStatus');
   if (st) st.textContent = '✓ Saved';
+  refreshSettingsRows();
   ntf('API URL saved. Please sign in again.');
   window.location.href = 'login.html';
 }
