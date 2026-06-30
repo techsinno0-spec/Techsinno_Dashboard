@@ -57,8 +57,14 @@ async function loadGoals() {
   if (!container) return;
 
   try {
-    syncState = await syncLoad();
-    goalsData = ((syncState && syncState.data && syncState.data.goals) || []).map(normalizeGoal);
+    const planning = typeof stateLoad === 'function' ? await stateLoad('planning') : null;
+    if (planning && planning.success && planning.value) {
+      syncState = { data: planning.value };
+      goalsData = (planning.value.goals || []).map(normalizeGoal);
+    } else {
+      syncState = await syncLoad();
+      goalsData = ((syncState && syncState.data && syncState.data.goals) || []).map(normalizeGoal);
+    }
   } catch {
     goalsData = [];
   }
@@ -106,11 +112,13 @@ async function toggleGoalDone(idx) {
 async function saveGoals() {
   try {
     const current = syncState && syncState.data ? syncState.data : ((await syncLoad()).data || {});
-    await syncSave({
+    const payload = {
       tasks: current.tasks || [],
       posts: current.posts || [],
       goals: goalsData.map(toElectronGoal)
-    });
+    };
+    if (typeof stateSave === 'function') await stateSave('planning', payload);
+    await syncSave(payload);
     loadGoals();
   } catch {
     ntf('Failed to save goals');

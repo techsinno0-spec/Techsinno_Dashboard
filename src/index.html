@@ -790,6 +790,15 @@ function gs(k){try{return JSON.parse(localStorage.getItem(k));}catch(e){return n
 function ss2(k,v){localStorage.setItem(k,JSON.stringify(v));}
 async function lSt(){
   if(isE){
+    const planning=await window.techsinno.stateLoad('planning').catch(()=>null);
+    if(planning&&planning.success&&planning.value){
+      ST.t=planning.value.tasks||WEEKS.map(w=>w.t.map(t=>({...t})));
+      ST.g=planning.value.goals||GD.map(g=>({...g,d:false}));
+      ST.p=planning.value.posts||PD.map(p=>({...p}));
+      _lastSyncSavedAt=planning.savedAt||planning.value.savedAt||null;
+      updSyncPill({success:true,savedAt:_lastSyncSavedAt||new Date().toISOString(),source:'cloud'});
+      return;
+    }
     const cloud=await window.techsinno.syncLoad();
     if(cloud.success&&cloud.data){
       ST.t=cloud.data.tasks||WEEKS.map(w=>w.t.map(t=>({...t})));
@@ -814,7 +823,10 @@ async function svSt(){
     await window.techsinno.storeSet('tasks',ST.t);
     await window.techsinno.storeSet('goals',ST.g);
     await window.techsinno.storeSet('posts',ST.p);
-    const r=await window.techsinno.syncSave({tasks:ST.t,goals:ST.g,posts:ST.p,dashboard:buildDashboardSnapshot(),savedAt:new Date().toISOString()});
+    const payload={tasks:ST.t,goals:ST.g,posts:ST.p,dashboard:buildDashboardSnapshot(),savedAt:new Date().toISOString()};
+    const stateResult=await window.techsinno.stateSave('planning',payload).catch(()=>null);
+    await window.techsinno.stateSave('dashboard',payload.dashboard).catch(()=>null);
+    const r=stateResult&&stateResult.success?{...stateResult,source:'cloud'}:await window.techsinno.syncSave(payload);
     if(r&&r.success)_lastSyncSavedAt=r.savedAt||r.ts||_lastSyncSavedAt;
     updSyncPill(r);
     _syncSaving=false;
@@ -825,6 +837,24 @@ async function svSt(){
 async function pullCloudSync(force=false){
   if(!isE||_syncSaving||!window.techsinno||!window.techsinno.syncLoad)return;
   try{
+    const planning=await window.techsinno.stateLoad('planning').catch(()=>null);
+    if(planning&&planning.success&&planning.value){
+      const savedAt=planning.savedAt||planning.value.savedAt||null;
+      if(!force&&savedAt&&_lastSyncSavedAt&&savedAt===_lastSyncSavedAt){updSyncPill({success:true,savedAt,source:'cloud'});return;}
+      ST.t=planning.value.tasks||ST.t;
+      ST.g=planning.value.goals||ST.g;
+      ST.p=planning.value.posts||ST.p;
+      _lastSyncSavedAt=savedAt;
+      await window.techsinno.storeSet('tasks',ST.t);
+      await window.techsinno.storeSet('goals',ST.g);
+      await window.techsinno.storeSet('posts',ST.p);
+      updSyncPill({success:true,savedAt:savedAt||new Date().toISOString(),source:'cloud'});
+      if(curP===0)rDash();
+      if(curP===1)rTasks();
+      if(curP===2)rGoals();
+      if(curP===4)rSocial();
+      return;
+    }
     const cloud=await window.techsinno.syncLoad();
     if(!cloud||!cloud.success||!cloud.data){if(cloud)updSyncPill(cloud);return;}
     const savedAt=cloud.savedAt||cloud.data.savedAt||null;

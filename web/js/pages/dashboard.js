@@ -112,6 +112,14 @@ async function render_dashboard() {
         shared = (sharedState && sharedState.data) || {};
       } catch {}
     }
+    if (isManager() && typeof stateLoad === 'function') {
+      try {
+        const planning = await stateLoad('planning');
+        if (planning && planning.success && planning.value) shared = { ...shared, ...planning.value };
+        const dashboardState = await stateLoad('dashboard');
+        if (dashboardState && dashboardState.success && dashboardState.value) shared.dashboard = dashboardState.value;
+      } catch {}
+    }
 
     const snap = shared.dashboard || {};
     const sharedTasks = Array.isArray(shared.tasks) ? shared.tasks.flat() : [];

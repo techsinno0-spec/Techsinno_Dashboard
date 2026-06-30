@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('techsinno', {
   cloudConfigGet:    (service) => ipcRenderer.invoke('cloud-config-get', service),
   cloudConfigSave:   (service, body) => ipcRenderer.invoke('cloud-config-save', service, body),
   cloudConfigList:   () => ipcRenderer.invoke('cloud-config-list'),
+  stateLoad:         (key) => ipcRenderer.invoke('state-load', key),
+  stateSave:         (key, value) => ipcRenderer.invoke('state-save', key, value),
   // Zoho
   getZohoConfig:     ()      => ipcRenderer.invoke('get-zoho-config'),
   saveZohoConfig:    (cfg)   => ipcRenderer.invoke('save-zoho-config', cfg),

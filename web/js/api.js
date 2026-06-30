@@ -55,3 +55,12 @@ async function syncLoad() {
 async function syncSave(data) {
   return apiPut('/sync', { ...data, savedAt: new Date().toISOString() });
 }
+
+async function stateLoad(key) {
+  const data = await apiGet('/state/' + key);
+  return data && data.success ? data : { success: false, key, value: null };
+}
+
+async function stateSave(key, value) {
+  return apiPut('/state/' + key, { value, savedAt: new Date().toISOString() });
+}

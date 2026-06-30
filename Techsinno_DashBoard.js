@@ -592,6 +592,22 @@ ipcMain.handle('cloud-config-save', async (_, service, body) => {
 });
 ipcMain.handle('cloud-config-list', async () => cloudConfigList());
 
+ipcMain.handle('state-load', async (_, key) => {
+  try {
+    return await cloudApi('GET', `/state/${key}`);
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+
+ipcMain.handle('state-save', async (_, key, value) => {
+  try {
+    return await cloudApi('PUT', `/state/${key}`, { value, savedAt: new Date().toISOString() });
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+
 // ─── OPEN EXTERNAL URL ────────────────────────────────────────────────────────
 
 ipcMain.handle('open-url', (_, u) => { shell.openExternal(u); return true; });
@@ -2284,6 +2300,13 @@ ipcMain.handle('agent-reset', async () => {
 
 ipcMain.handle('manual-tasks-get', async () => {
   try {
+    const state = await cloudApi('GET', '/state/production');
+    if (state && state.success && state.value && Array.isArray(state.value.manualTasks)) {
+      store.set('manual_tasks', state.value.manualTasks);
+      return state.value.manualTasks;
+    }
+  } catch {}
+  try {
     const cloud = await cloudSyncLoadData();
     const tasks = Array.isArray(cloud.manualTasks) ? cloud.manualTasks : [];
     store.set('manual_tasks', tasks);
@@ -2304,6 +2327,7 @@ ipcMain.handle('manual-tasks-upsert', async (_, task) => {
   if (idx >= 0) tasks[idx] = { ...tasks[idx], ...task, updatedAt: now };
   else tasks.unshift({ ...task, id: uid(), createdAt: now, updatedAt: now });
   try {
+    await cloudApi('PUT', '/state/production', { value: { manualTasks: tasks }, savedAt: new Date().toISOString() });
     await cloudSyncSavePatch({ manualTasks: tasks });
   } catch (e) {
     return { error: 'Cloud sync failed. Task was not saved.', detail: e.message };
@@ -2320,6 +2344,7 @@ ipcMain.handle('manual-tasks-delete', async (_, id) => {
   } catch {}
   tasks = tasks.filter(t => t.id !== id);
   try {
+    await cloudApi('PUT', '/state/production', { value: { manualTasks: tasks }, savedAt: new Date().toISOString() });
     await cloudSyncSavePatch({ manualTasks: tasks });
   } catch (e) {
     return { error: 'Cloud sync failed. Task was not deleted.', detail: e.message };

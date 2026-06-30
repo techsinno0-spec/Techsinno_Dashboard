@@ -109,11 +109,20 @@ function renderJobTasksTabs() {
 }
 
 async function loadJobManualTasks() {
+  const production = typeof stateLoad === 'function' ? await stateLoad('production') : null;
+  if (production && production.success && production.value && Array.isArray(production.value.manualTasks)) {
+    _jobManualTasks = production.value.manualTasks;
+    return;
+  }
   const state = await syncLoad();
   _jobManualTasks = (state && state.data && Array.isArray(state.data.manualTasks)) ? state.data.manualTasks : [];
 }
 
 async function saveJobManualTasks() {
+  if (typeof stateSave === 'function') {
+    const stateSaved = await stateSave('production', { manualTasks: _jobManualTasks });
+    if (!stateSaved || stateSaved.error || stateSaved.success === false) throw new Error(stateSaved && stateSaved.error ? stateSaved.error : 'Cloud state failed');
+  }
   const saved = await syncSave({ manualTasks: _jobManualTasks });
   if (!saved || saved.error || saved.success === false) throw new Error(saved && saved.error ? saved.error : 'Cloud sync failed');
 }
