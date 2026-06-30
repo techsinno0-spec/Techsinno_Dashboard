@@ -71,6 +71,14 @@ function getUserName(id) {
   return u ? u.displayName : id;
 }
 
+function refreshCurrentPageFromCloud() {
+  if (!isManager()) return;
+  const renderName = 'render_' + currentPage.replace(/-/g, '_');
+  if (typeof window[renderName] === 'function') {
+    window[renderName]();
+  }
+}
+
 async function initApp() {
   if (!requireAuth()) return;
   const user = getUser();
@@ -89,10 +97,7 @@ async function initApp() {
   navigateTo('dashboard');
 
   if (isManager()) {
-    setInterval(() => {
-      if (currentPage === 'dashboard') render_dashboard();
-      if (currentPage === 'goals') loadGoals();
-    }, 30000);
+    setInterval(refreshCurrentPageFromCloud, 30000);
   }
 }
 

@@ -845,7 +845,10 @@ async function pullCloudSync(force=false){
 }
 function startCloudSync(){
   if(!isE||_syncPullTimer)return;
-  _syncPullTimer=setInterval(()=>pullCloudSync(false),30000);
+  _syncPullTimer=setInterval(async()=>{
+    await pullCloudSync(false);
+    if(!_syncSaving)await svSt();
+  },30000);
 }
 function updSyncPill(r){
   const el=document.getElementById('syncPill');
@@ -895,15 +898,40 @@ function buildDashboardSnapshot(){
   const all=ST.t.flat();
   const pp=phaseProgressValues();
   const summary=zD&&zD.success?zD.summary:null;
+  const d=dop(),wi=Math.min(Math.floor((d-1)/7),ST.t.length-1),dow=new Date().getDay();
+  const slot=(dow===0||dow===6)?'wknd':'eve';
+  const todayTasks=(ST.t[wi]||[]).filter(t=>t.s===slot).map(t=>({
+    title:t.x,category:t.g,slot:t.s,done:!!t.d
+  }));
+  const revenue=summary?{
+    target:40000,
+    totalInvoiced:summary.totalInvoiced||0,
+    totalReceived:summary.totalReceived||0,
+    totalExpenses:summary.totalExpenses||0,
+    totalOverdue:summary.totalOverdue||0,
+    netProfit:summary.netProfit||0
+  }:null;
+  const activeManualTasks=(Array.isArray(_manualTasks)?_manualTasks:[])
+    .filter(t=>t.status!=='done')
+    .sort((a,b)=>{
+      const ad=a.deadline?new Date(a.deadline).getTime():9e15;
+      const bd=b.deadline?new Date(b.deadline).getTime():9e15;
+      return ad-bd;
+    })
+    .slice(0,5)
+    .map(t=>({title:t.title,deadline:t.deadline||'',priority:t.priority||'medium',status:t.status||'pending'}));
   return {
-    day:dop(),
-    phase:dop()<=30?'Phase 1':dop()<=60?'Phase 2':'Phase 3',
+    day:d,
+    phase:d<=30?'Phase 1':d<=60?'Phase 2':'Phase 3',
     tasksDone:all.filter(t=>t.d).length,
     tasksTotal:all.length,
     postsPublished:ST.p.filter(p=>p.s==='posted').length,
     postsTotal:ST.p.length,
     phaseProgress:pp,
     schedule:dashboardScheduleItems(),
+    todayTasks,
+    revenue,
+    jobTasks:activeManualTasks,
     zoho:summary?{summary,overdueInvoices:zD.overdueInvoices||[],recentInvoices:zD.recentInvoices||[],recentExpenses:zD.recentExpenses||[]}:null,
     savedAt:new Date().toISOString()
   };
