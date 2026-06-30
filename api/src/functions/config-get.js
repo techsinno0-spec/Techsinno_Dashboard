@@ -1,6 +1,7 @@
 const { app } = require('@azure/functions');
 const { getItem } = require('../../shared/cosmos');
 const { authenticate, jsonResponse, unauthorized, forbidden, isOwner } = require('../../shared/auth');
+const { CONFIG_SERVICES, safeConfig } = require('../../shared/config-safe');
 
 app.http('config-get', {
   methods: ['GET'],
@@ -12,20 +13,13 @@ app.http('config-get', {
     if (!isOwner(decoded)) return forbidden('Owner access required');
 
     const service = request.params.service;
-    const VALID = ['zoho_books', 'zoho_mail', 'gmail', 'outlook', 'linkedin', 'claude', 'hunter', 'cloudflare', 'onedrive', 'goals_private'];
-    if (!VALID.includes(service)) return jsonResponse({ error: 'Unknown service' }, 400);
+    if (!CONFIG_SERVICES.includes(service)) return jsonResponse({ error: 'Unknown service' }, 400);
 
     try {
       const config = await getItem('config', `cfg_${service}`);
       if (!config) return jsonResponse({ config: { service, connected: false } });
 
-      const safe = { ...config };
-      if (safe.accessToken) safe.hasAccessToken = true;
-      delete safe.accessToken;
-      delete safe.refreshToken;
-      safe.connected = !!config.accessToken;
-
-      return jsonResponse({ config: safe });
+      return jsonResponse({ config: safeConfig(config, service) });
     } catch (err) {
       if (err.code === 404) return jsonResponse({ config: { service, connected: false } });
       return jsonResponse({ error: 'Failed to fetch config' }, 500);

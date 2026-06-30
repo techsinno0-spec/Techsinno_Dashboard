@@ -569,6 +569,29 @@ async function cloudConfigSave(service, body) {
   } catch {}
 }
 
+async function cloudConfigGet(service) {
+  try {
+    return await cloudApi('GET', `/config/${service}`);
+  } catch {
+    return null;
+  }
+}
+
+async function cloudConfigList() {
+  try {
+    return await cloudApi('GET', '/config');
+  } catch {
+    return null;
+  }
+}
+
+ipcMain.handle('cloud-config-get', async (_, service) => cloudConfigGet(service));
+ipcMain.handle('cloud-config-save', async (_, service, body) => {
+  await cloudConfigSave(service, body);
+  return { success: true };
+});
+ipcMain.handle('cloud-config-list', async () => cloudConfigList());
+
 // ─── OPEN EXTERNAL URL ────────────────────────────────────────────────────────
 
 ipcMain.handle('open-url', (_, u) => { shell.openExternal(u); return true; });

@@ -10,6 +10,9 @@ contextBridge.exposeInMainWorld('techsinno', {
   authChangePassword:(c, n) => ipcRenderer.invoke('auth-change-password', c, n),
   // API proxy (calls Azure Functions)
   apiCall:           (method, path, body) => ipcRenderer.invoke('api-call', method, path, body),
+  cloudConfigGet:    (service) => ipcRenderer.invoke('cloud-config-get', service),
+  cloudConfigSave:   (service, body) => ipcRenderer.invoke('cloud-config-save', service, body),
+  cloudConfigList:   () => ipcRenderer.invoke('cloud-config-list'),
   // Zoho
   getZohoConfig:     ()      => ipcRenderer.invoke('get-zoho-config'),
   saveZohoConfig:    (cfg)   => ipcRenderer.invoke('save-zoho-config', cfg),

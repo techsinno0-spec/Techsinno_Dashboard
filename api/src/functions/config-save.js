@@ -1,6 +1,7 @@
 const { app } = require('@azure/functions');
 const { getItem, createItem, replaceItem } = require('../../shared/cosmos');
 const { authenticate, jsonResponse, unauthorized, forbidden, badRequest, isOwner } = require('../../shared/auth');
+const { CONFIG_SERVICES, safeConfig } = require('../../shared/config-safe');
 
 app.http('config-save', {
   methods: ['PUT'],
@@ -12,8 +13,7 @@ app.http('config-save', {
     if (!isOwner(decoded)) return forbidden('Owner access required');
 
     const service = request.params.service;
-    const VALID = ['zoho_books', 'zoho_mail', 'gmail', 'outlook', 'linkedin', 'claude', 'hunter', 'cloudflare', 'onedrive', 'goals_private'];
-    if (!VALID.includes(service)) return badRequest('Unknown service');
+    if (!CONFIG_SERVICES.includes(service)) return badRequest('Unknown service');
 
     try {
       const body = await request.json();
@@ -34,6 +34,15 @@ app.http('config-save', {
       if (body.region !== undefined) config.region = body.region;
       if (body.accountId !== undefined) config.accountId = body.accountId;
       if (body.aliases !== undefined) config.aliases = Array.isArray(body.aliases) ? body.aliases : [];
+      if (body.companyName !== undefined) config.companyName = body.companyName;
+      if (body.registrationNumber !== undefined) config.registrationNumber = body.registrationNumber;
+      if (body.email !== undefined) config.email = body.email;
+      if (body.phone !== undefined) config.phone = body.phone;
+      if (body.address !== undefined) config.address = body.address;
+      if (body.website !== undefined) config.website = body.website;
+      if (body.ownerName !== undefined) config.ownerName = body.ownerName;
+      if (body.notes !== undefined) config.notes = body.notes;
+      if (body.connected !== undefined) config.connected = !!body.connected;
       if (body.accessToken !== undefined) config.accessToken = body.accessToken;
       if (body.refreshToken !== undefined) config.refreshToken = body.refreshToken;
       if (body.tokenExpiry !== undefined) config.tokenExpiry = body.tokenExpiry;
@@ -46,7 +55,7 @@ app.http('config-save', {
         await createItem('config', config);
       }
 
-      return jsonResponse({ success: true, message: `${service} config saved` });
+      return jsonResponse({ success: true, message: `${service} config saved`, config: safeConfig(config, service) });
     } catch (err) {
       return jsonResponse({ error: 'Failed to save config' }, 500);
     }

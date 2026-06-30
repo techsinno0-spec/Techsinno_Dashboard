@@ -8,7 +8,7 @@ const SERVICES = [
   { key: 'hunter', label: 'Hunter.io', icon: 'ti-search', fields: ['apiKey'], note: 'Email finder for outreach lead discovery.' },
   { key: 'cloudflare', label: 'Cloudflare', icon: 'ti-cloud', fields: ['apiKey', 'zoneId'], note: 'Website analytics for techsinno.com traffic.' },
   { key: 'onedrive', label: 'OneDrive', icon: 'ti-cloud-upload', fields: ['clientId', 'clientSecret'], note: 'Optional Microsoft/OneDrive file sync and backup connection.' },
-  { key: 'account', label: 'Account Details', icon: 'ti-building', fields: [], note: 'Company identity, primary email, and address.' }
+  { key: 'account_details', label: 'Account Details', icon: 'ti-building', fields: ['companyName', 'registrationNumber', 'email', 'phone', 'address', 'website', 'ownerName'], note: 'Company identity, primary email, and address.' }
 ];
 
 const FIELD_LABELS = {
@@ -17,7 +17,14 @@ const FIELD_LABELS = {
   orgId: 'Organization ID',
   apiKey: 'API Key',
   zoneId: 'Zone ID',
-  region: 'Region'
+  region: 'Region',
+  companyName: 'Company Name',
+  registrationNumber: 'Registration Number',
+  email: 'Primary Email',
+  phone: 'Phone',
+  address: 'Address',
+  website: 'Website',
+  ownerName: 'Owner Name'
 };
 
 const CONFIG_CACHE = {};
@@ -57,7 +64,7 @@ function renderSettingsRow(svc) {
 }
 
 function renderSettingsDetail(svc) {
-  if (svc.key === 'account') return renderAccountDetail();
+  if (svc.key === 'account_details') return renderAccountDetail();
   return `<div class="card" id="cfg-detail-${svc.key}" style="display:none;padding:14px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
       <i class="ti ${svc.icon}" style="font-size:16px;color:var(--brand-mid)"></i>
@@ -78,12 +85,17 @@ function renderSettingsDetail(svc) {
 }
 
 function renderAccountDetail() {
-  return `<div class="card" id="cfg-detail-account" style="display:none;padding:14px">
+  return `<div class="card" id="cfg-detail-account_details" style="display:none;padding:14px">
     <div class="ctitle"><i class="ti ti-building" style="color:var(--brand-mid);margin-right:5px"></i>Account details</div>
     <div class="ri"><i class="ti ti-building" style="color:var(--brand-mid);font-size:13px;flex-shrink:0"></i><div><div style="font-size:12px;color:var(--text)">TECHSINNO (Pty) Ltd</div><div style="font-size:10px;color:var(--text3)">Reg: 2022/364165/07 · Tax: 9234848266</div></div></div>
     <div class="ri"><i class="ti ti-mail" style="color:var(--brand-mid);font-size:13px;flex-shrink:0"></i><div><div style="font-size:12px;color:var(--text)">frank@techsinno.com <span style="font-size:9px;background:rgba(26,107,138,.2);color:var(--brand-mid);padding:1px 5px;border-radius:8px;font-family:'DM Mono',monospace">PRIMARY</span></div><div style="font-size:10px;color:var(--text3)">Zoho Mail · www.techsinno.com · outgoing customer mail</div></div></div>
     <div class="ri"><i class="ti ti-brand-gmail" style="color:#ea4335;font-size:13px;flex-shrink:0"></i><div><div style="font-size:12px;color:var(--text)">techsinno0@gmail.com</div><div style="font-size:10px;color:var(--text3)">Google account · also used for Microsoft 365 / OneDrive</div></div></div>
     <div class="ri"><i class="ti ti-map-pin" style="color:var(--brand-mid);font-size:13px;flex-shrink:0"></i><div><div style="font-size:12px;color:var(--text)">Kuilsriver, Western Cape, 7580</div><div style="font-size:10px;color:var(--text3)">6 Marais St, Unit 19, Kuilenoord Complex</div></div></div>
+    ${['companyName', 'registrationNumber', 'email', 'phone', 'address', 'website', 'ownerName'].map(f => `
+      <div class="flbl">${FIELD_LABELS[f]}</div>
+      ${fieldInput('account_details', f)}
+    `).join('')}
+    <button class="btn bsm" onclick="saveServiceConfig('account_details')">Save account details</button>
   </div>`;
 }
 
@@ -125,15 +137,6 @@ async function connectServiceEmail(key) {
 }
 
 async function loadServiceConfig(key) {
-  if (key === 'account') {
-    const badge = document.getElementById('cfg-status-account');
-    if (badge) {
-      badge.textContent = 'Info';
-      badge.style.background = 'var(--card-hover)';
-      badge.style.color = 'var(--text3)';
-    }
-    return;
-  }
   const badge = document.getElementById(`cfg-status-${key}`);
   try {
     const data = await apiGet(`/config/${key}`);
@@ -145,6 +148,9 @@ async function loadServiceConfig(key) {
     svc.fields.forEach(f => {
       const input = document.getElementById(`cfg-${key}-${f}`);
       if (input && cfg && cfg[f]) input.value = cfg[f];
+      else if (input && (f === 'clientSecret' || f === 'apiKey') && cfg && (cfg.hasClientSecret || cfg.hasApiKey)) {
+        input.placeholder = 'Configured on server - enter new value to replace';
+      }
     });
   } catch {
     if (badge) {
@@ -161,7 +167,7 @@ function setConfigBadge(key, cfg) {
     badge.textContent = 'Connected';
     badge.style.background = '#3fb95020';
     badge.style.color = '#3fb950';
-  } else if (cfg && (cfg.clientId || cfg.apiKey)) {
+  } else if (cfg && (cfg.configured || cfg.clientId || cfg.hasApiKey || cfg.hasClientSecret)) {
     badge.textContent = 'Configured';
     badge.style.background = 'var(--brand-mid-20)';
     badge.style.color = 'var(--brand-mid)';
