@@ -19,6 +19,14 @@ jobs:
         with:
           submodules: true
           lfs: false
+      - name: Prepare static app artifact
+        shell: bash
+        run: |
+          rm -rf swa-dist
+          mkdir -p swa-dist
+          cp -R web/. swa-dist/
+          test -f swa-dist/index.html
+          test -f swa-dist/app.html
       - name: Build And Deploy
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
@@ -28,7 +36,7 @@ jobs:
           action: "upload"
           ###### Repository/Build Configurations - These values can be configured to match your app requirements. ######
           # For more information regarding Static Web App workflow configurations, please visit: https://aka.ms/swaworkflowconfig
-          app_location: "web" # App source code path
+          app_location: "swa-dist" # Prepared static app artifact
           api_location: "api" # Api source code path - optional
           output_location: ""
           skip_app_build: true
