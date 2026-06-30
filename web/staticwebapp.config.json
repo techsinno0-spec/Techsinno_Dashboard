@@ -8,10 +8,6 @@
       "rewrite": "/index.html"
     },
     {
-      "route": "/web/",
-      "rewrite": "/index.html"
-    },
-    {
       "route": "/web/app.html",
       "rewrite": "/app.html"
     },
