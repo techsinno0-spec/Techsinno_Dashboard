@@ -2,6 +2,28 @@
   "platform": {
     "apiRuntime": "node:20"
   },
+  "routes": [
+    {
+      "route": "/web",
+      "rewrite": "/index.html"
+    },
+    {
+      "route": "/web/",
+      "rewrite": "/index.html"
+    },
+    {
+      "route": "/web/app.html",
+      "rewrite": "/app.html"
+    },
+    {
+      "route": "/app",
+      "rewrite": "/app.html"
+    },
+    {
+      "route": "/dashboard",
+      "rewrite": "/app.html"
+    }
+  ],
   "navigationFallback": {
     "rewrite": "/index.html",
     "exclude": ["/img/*", "/css/*", "/js/*", "*.{css,js,png,jpg,jpeg,gif,svg,ico,json,webp}"]
