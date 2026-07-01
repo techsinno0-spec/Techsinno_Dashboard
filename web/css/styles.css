@@ -28,7 +28,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;hei
 .logo-text{font-family:'Syne',sans-serif;font-weight:800;font-size:13px;color:var(--brand-mid);}
 .logo-sub{font-size:9px;color:var(--text3);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.08em;}
 .nav-sec{font-size:9px;color:var(--text3);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.1em;padding:12px 14px 4px;display:flex;align-items:center;gap:6px;}
-.nav-sec i{font-size:11px;color:var(--brand-mid);opacity:.75;}
+.nav-sec i{font-size:11px;opacity:.85;}
 .nav-item{display:flex;align-items:center;gap:8px;padding:8px 14px;cursor:pointer;color:var(--text2);font-size:12px;transition:all .15s;border-left:2px solid transparent;}
 .nav-item:hover{color:var(--text);background:rgba(255,255,255,.04);}
 .nav-item.active{color:var(--brand-mid);background:rgba(26,107,138,.1);border-left-color:var(--brand-mid);}

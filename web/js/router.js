@@ -1,34 +1,34 @@
 const NAV_CONFIG = [
-  { section: 'Overview', icon: 'ti-compass' },
-  { id: 'dashboard', icon: 'ti-layout-dashboard', label: 'Dashboard', roles: ['manager', 'staff', 'viewer'] },
-  { id: 'tasks', icon: 'ti-checklist', label: 'Weekly tasks', roles: ['manager', 'staff', 'viewer'], taskView: 'weekly' },
-  { section: 'Business', icon: 'ti-briefcase', roles: ['manager'] },
-  { id: 'goals', icon: 'ti-target', label: '90-day goals', roles: ['manager'] },
-  { id: 'zoho', icon: 'ti-chart-bar', label: 'Zoho Books', roles: ['owner'] },
-  { id: 'social', icon: 'ti-share', label: 'Social Media', roles: ['manager'] },
-  { id: 'inboxes', icon: 'ti-inbox', label: 'All Inboxes', roles: ['manager'] },
-  { section: 'Admin', icon: 'ti-shield-cog' },
-  { id: 'reminders', icon: 'ti-bell', label: 'Reminders', roles: ['manager', 'staff', 'viewer'] },
-  { id: 'settings', icon: 'ti-settings', label: 'Settings', roles: ['owner'] },
-  { id: 'communications', icon: 'ti-messages', label: 'Communications', roles: ['manager'] },
-  { section: 'Automation', icon: 'ti-sparkles' },
-  { id: 'agent', icon: 'ti-robot', label: 'AI Agent', roles: ['manager', 'staff', 'viewer'] },
-  { section: 'Mail', icon: 'ti-mailbox', roles: ['manager'] },
-  { id: 'mail-zoho', target: 'inboxes', icon: 'ti-mail', label: 'Zoho Mail', roles: ['manager'], provider: 'zoho_mail' },
-  { id: 'mail-gmail', target: 'inboxes', icon: 'ti-brand-gmail', label: 'Gmail', roles: ['manager'], provider: 'gmail' },
-  { id: 'mail-outlook', target: 'inboxes', icon: 'ti-mail', label: 'Outlook', roles: ['manager'], provider: 'outlook' },
-  { section: 'Production', icon: 'ti-tools' },
-  { id: 'job-cards', icon: 'ti-tool', label: 'Job Tasks', roles: ['manager', 'staff', 'viewer'] },
-  { section: 'Team', icon: 'ti-users-group', roles: ['manager'] },
-  { id: 'team-tasks', target: 'tasks', icon: 'ti-checklist', label: 'Team Tasks', roles: ['manager', 'staff', 'viewer'], taskView: 'team' },
-  { id: 'team', icon: 'ti-users', label: 'Team Mgmt', roles: ['owner'] },
-  { id: 'staff-activity', icon: 'ti-activity', label: 'Staff Activity', roles: ['manager'] },
-  { id: 'task-reports', icon: 'ti-report-analytics', label: 'Task Reports', roles: ['manager'] },
-  { section: 'Manager Tools', icon: 'ti-tool', roles: ['manager'] },
-  { id: 'crm', icon: 'ti-address-book', label: 'CRM', roles: ['manager'] },
-  { id: 'quotes', icon: 'ti-file-invoice', label: 'Quotes', roles: ['manager'] },
-  { id: 'templates', icon: 'ti-template', label: 'Templates', roles: ['manager'] },
-  { id: 'marketing', icon: 'ti-speakerphone', label: 'Marketing', roles: ['manager'] },
+  { section: 'Overview', icon: 'ti-compass', color: '#5fa8c4' },
+  { id: 'dashboard', icon: 'ti-layout-dashboard', color: '#5fa8c4', label: 'Dashboard', roles: ['manager', 'staff', 'viewer'] },
+  { id: 'tasks', icon: 'ti-checklist', color: '#3fb950', label: 'Weekly tasks', roles: ['manager', 'staff', 'viewer'], taskView: 'weekly' },
+  { section: 'Business', icon: 'ti-briefcase', color: '#f4a300', roles: ['manager'] },
+  { id: 'goals', icon: 'ti-target', color: '#f4a300', label: '90-day goals', roles: ['manager'] },
+  { id: 'zoho', icon: 'ti-chart-bar', color: '#3fb950', label: 'Zoho Books', roles: ['owner'] },
+  { id: 'social', icon: 'ti-share', color: '#0a66c2', label: 'Social Media', roles: ['manager'] },
+  { id: 'inboxes', icon: 'ti-inbox', color: '#5fa8c4', label: 'All Inboxes', roles: ['manager'] },
+  { section: 'Admin', icon: 'ti-shield-cog', color: '#a371f7' },
+  { id: 'reminders', icon: 'ti-bell', color: '#f4a300', label: 'Reminders', roles: ['manager', 'staff', 'viewer'] },
+  { id: 'settings', icon: 'ti-settings', color: '#8b949e', label: 'Settings', roles: ['owner'] },
+  { id: 'communications', icon: 'ti-messages', color: '#5fa8c4', label: 'Communications', roles: ['manager'] },
+  { section: 'Automation', icon: 'ti-sparkles', color: '#a371f7' },
+  { id: 'agent', icon: 'ti-robot', color: '#a371f7', label: 'AI Agent', roles: ['manager', 'staff', 'viewer'] },
+  { section: 'Mail', icon: 'ti-mailbox', color: '#5fa8c4', roles: ['manager'] },
+  { id: 'mail-zoho', target: 'inboxes', icon: 'ti-mail', color: '#ffbf00', label: 'Zoho Mail', roles: ['manager'], provider: 'zoho_mail' },
+  { id: 'mail-gmail', target: 'inboxes', icon: 'ti-brand-gmail', color: '#ea4335', label: 'Gmail', roles: ['manager'], provider: 'gmail' },
+  { id: 'mail-outlook', target: 'inboxes', icon: 'ti-mail', color: '#0078d4', label: 'Outlook', roles: ['manager'], provider: 'outlook' },
+  { section: 'Production', icon: 'ti-tools', color: '#ff8a65' },
+  { id: 'job-cards', icon: 'ti-tool', color: '#ff8a65', label: 'Job Tasks', roles: ['manager', 'staff', 'viewer'] },
+  { section: 'Team', icon: 'ti-users-group', color: '#5fa8c4', roles: ['manager'] },
+  { id: 'team-tasks', target: 'tasks', icon: 'ti-checklist', color: '#3fb950', label: 'Team Tasks', roles: ['manager', 'staff', 'viewer'], taskView: 'team' },
+  { id: 'team', icon: 'ti-users', color: '#5fa8c4', label: 'Team Mgmt', roles: ['owner'] },
+  { id: 'staff-activity', icon: 'ti-activity', color: '#3fb950', label: 'Staff Activity', roles: ['manager'] },
+  { id: 'task-reports', icon: 'ti-report-analytics', color: '#f4a300', label: 'Task Reports', roles: ['manager'] },
+  { section: 'Manager Tools', icon: 'ti-tool', color: '#f4a300', roles: ['manager'] },
+  { id: 'crm', icon: 'ti-address-book', color: '#5fa8c4', label: 'CRM', roles: ['manager'] },
+  { id: 'quotes', icon: 'ti-file-invoice', color: '#f4a300', label: 'Quotes', roles: ['manager'] },
+  { id: 'templates', icon: 'ti-template', color: '#a371f7', label: 'Templates', roles: ['manager'] },
+  { id: 'marketing', icon: 'ti-speakerphone', color: '#ff8a65', label: 'Marketing', roles: ['manager'] },
 ];
 
 let currentPage = 'dashboard';
@@ -44,7 +44,7 @@ function buildSidebar() {
       if (item.roles && !canAccessRole(item.roles)) return;
       const sec = document.createElement('div');
       sec.className = 'nav-sec';
-      sec.innerHTML = `${item.icon ? `<i class="ti ${item.icon}"></i>` : ''}<span>${item.section}</span>`;
+      sec.innerHTML = `${item.icon ? `<i class="ti ${item.icon}" style="color:${item.color || 'var(--brand-mid)'}"></i>` : ''}<span>${item.section}</span>`;
       nav.appendChild(sec);
       return;
     }
@@ -53,7 +53,7 @@ function buildSidebar() {
     const el = document.createElement('div');
     el.className = 'nav-item' + (item.id === currentNavId ? ' active' : '');
     el.dataset.page = item.id;
-    el.innerHTML = `<i class="ti ${item.icon}"></i>${item.label}`;
+    el.innerHTML = `<i class="ti ${item.icon}" style="color:${item.color || 'var(--brand-mid)'}"></i>${item.label}`;
     el.addEventListener('click', () => navigateTo(targetPage, { navId: item.id, provider: item.provider, taskView: item.taskView }));
     nav.appendChild(el);
   });
