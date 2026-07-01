@@ -4,10 +4,22 @@ let webAgentTab = 0;
 let webManualTasks = [];
 let webAgentJobCards = [];
 
-const webAgentTypeLabel = { email_reply:'Lead reply', cold_email:'Cold email', quote_draft:'Quote draft', linkedin_post:'LinkedIn post', opportunity:'Opportunity', task_reminder:'Task reminder' };
-const webAgentTypeIcon  = { email_reply:'ti-mail', cold_email:'ti-send', quote_draft:'ti-file-invoice', linkedin_post:'ti-brand-linkedin', opportunity:'ti-briefcase', task_reminder:'ti-bell' };
-const webAgentTypeColor = { email_reply:'var(--brand-mid)', cold_email:'var(--accent)', quote_draft:'#3fb950', linkedin_post:'#0a66c2', opportunity:'#a371f7', task_reminder:'#f85149' };
-const webAgentFlagColor = { lead:'#3fb950', quote_request:'var(--accent)', urgent:'#f85149', follow_up:'var(--brand-mid)', outreach:'var(--accent)', content:'var(--brand-mid)', opportunity:'#a371f7' };
+const webAgentTypeLabel = {
+  email_reply:'Lead reply', cold_email:'Cold email', quote_draft:'Quote draft', linkedin_post:'LinkedIn post',
+  opportunity:'Opportunity', task_reminder:'Task reminder', admin_task:'Admin task', admin_recommendation:'Admin recommendation',
+  task_assignment:'Task assignment', job_abnormality:'Job abnormality', lead_followup:'Lead follow-up', service_suggestion:'Service suggestion'
+};
+const webAgentTypeIcon  = {
+  email_reply:'ti-mail', cold_email:'ti-send', quote_draft:'ti-file-invoice', linkedin_post:'ti-brand-linkedin',
+  opportunity:'ti-briefcase', task_reminder:'ti-bell', admin_task:'ti-clipboard-check', admin_recommendation:'ti-bulb',
+  task_assignment:'ti-user-plus', job_abnormality:'ti-alert-triangle', lead_followup:'ti-phone-call', service_suggestion:'ti-sparkles'
+};
+const webAgentTypeColor = {
+  email_reply:'var(--brand-mid)', cold_email:'var(--accent)', quote_draft:'#3fb950', linkedin_post:'#0a66c2',
+  opportunity:'#a371f7', task_reminder:'#f85149', admin_task:'#5fa8c4', admin_recommendation:'#a371f7',
+  task_assignment:'#3fb950', job_abnormality:'#f85149', lead_followup:'var(--accent)', service_suggestion:'#ff8a65'
+};
+const webAgentFlagColor = { lead:'#3fb950', quote_request:'var(--accent)', urgent:'#f85149', blocked:'#f85149', follow_up:'var(--brand-mid)', outreach:'var(--accent)', content:'var(--brand-mid)', opportunity:'#a371f7', admin:'#5fa8c4' };
 
 async function render_agent() {
   const el = document.getElementById('page-agent');
@@ -34,8 +46,24 @@ async function render_agent() {
     <button class="wtab" id="webAgTab3" onclick="webAgentSetTab(3)"><i class="ti ti-world" style="font-size:11px;margin-right:3px"></i>Website jobs</button>
     <button class="wtab" id="webAgTab4" onclick="webAgentSetTab(4)"><i class="ti ti-checklist" style="font-size:11px;margin-right:3px"></i>My Tasks</button>
     <button class="wtab" id="webAgTab5" onclick="webAgentSetTab(5)"><i class="ti ti-file-description" style="font-size:11px;margin-right:3px"></i>Job Cards</button>
+    <button class="wtab" id="webAgTab6" onclick="webAgentSetTab(6)">History</button>
   </div>
   <div id="webAgentTabContent"><div class="spin"></div> Loading...</div>`;
+  const adminStat = document.getElementById('webAgOpps');
+  if (adminStat) {
+    adminStat.id = 'webAgAdmin';
+    const box = adminStat.closest('.stat');
+    if (box) {
+      const label = box.querySelector('.slbl');
+      const sub = box.querySelector('.ssub');
+      if (label) label.textContent = 'Admin alerts';
+      if (sub) sub.textContent = 'tasks + jobs + CRM';
+    }
+  }
+  const intro = document.getElementById('webAgentLastScan')?.nextElementSibling;
+  if (intro) intro.textContent = 'Claude watches admin, tasks, jobs, leads and platforms, then proposes the next move for approval';
+  const adminTab = document.getElementById('webAgTab2');
+  if (adminTab) adminTab.textContent = 'Admin review';
   await webAgentLoadQueue();
 }
 
@@ -63,17 +91,17 @@ function webAgentUpdateStats() {
   const pending = webAgentQueue.filter(i => i.status === 'pending');
   const emails = pending.filter(i => ['email_reply','cold_email','quote_draft'].includes(i.type));
   const posts = pending.filter(i => i.type === 'linkedin_post');
-  const opps = pending.filter(i => i.type === 'opportunity');
+  const admin = pending.filter(i => ['admin_task','admin_recommendation','task_assignment','job_abnormality','lead_followup','service_suggestion'].includes(i.type));
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
   set('webAgPending', pending.length);
   set('webAgEmails', emails.length);
   set('webAgPosts', posts.length);
-  set('webAgOpps', opps.length);
+  set('webAgAdmin', admin.length);
 }
 
 function webAgentSetTab(tab) {
   webAgentTab = tab;
-  [0,1,2,3,4,5].forEach(i => document.getElementById('webAgTab' + i)?.classList.toggle('active', i === tab));
+  [0,1,2,3,4,5,6].forEach(i => document.getElementById('webAgTab' + i)?.classList.toggle('active', i === tab));
   webAgentRenderTab();
 }
 
@@ -82,10 +110,11 @@ function webAgentRenderTab() {
   if (!el) return;
   if (webAgentTab === 0) el.innerHTML = webAgentRenderPending();
   else if (webAgentTab === 1) el.innerHTML = webAgentRenderOpportunities();
-  else if (webAgentTab === 2) el.innerHTML = webAgentRenderHistory();
+  else if (webAgentTab === 2) el.innerHTML = webAgentRenderAdminReview();
   else if (webAgentTab === 3) el.innerHTML = webAgentRenderWebsiteJobs();
   else if (webAgentTab === 4) { el.innerHTML = '<div class="card"><div class="spin"></div> Loading tasks...</div>'; webAgentRenderMyTasks(el); }
-  else { el.innerHTML = '<div class="card"><div class="spin"></div> Loading job cards...</div>'; webAgentRenderJobCards(el); }
+  else if (webAgentTab === 5) { el.innerHTML = '<div class="card"><div class="spin"></div> Loading job cards...</div>'; webAgentRenderJobCards(el); }
+  else el.innerHTML = webAgentRenderHistory();
 }
 
 function webAgentRenderPending() {
@@ -105,6 +134,7 @@ function webAgentRenderPending() {
 function webAgentRenderItem(item) {
   const flagColor = webAgentFlagColor[item.flagType] || 'var(--text3)';
   const preview = (item.body || '').slice(0, 180).replace(/\n/g, ' ');
+  const actionBtn = item.action && item.action.kind ? `<button class="btn bsm" onclick="webAgentRunAction('${item.id}')"><i class="ti ti-player-play"></i> ${escHtml(item.action.label || 'Approve action')}</button>` : '';
   const diagnostic = (item.painPoint || item.evidence || item.techsinnoSolution || item.nextStep) ? `<div style="background:rgba(95,168,196,.08);border:1px solid rgba(95,168,196,.18);border-radius:var(--radius-sm);padding:8px 10px;margin:7px 0">
     <div style="font-size:10px;color:var(--brand-mid);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Problem spotted</div>
     ${item.painPoint ? `<div style="font-size:11px;color:var(--text);margin-bottom:3px"><strong>Pain:</strong> ${escHtml(item.painPoint)}</div>` : ''}
@@ -124,6 +154,7 @@ function webAgentRenderItem(item) {
     ${diagnostic}
     <div style="font-size:11px;color:var(--text2);line-height:1.5;margin:6px 0 9px;background:var(--bg4);padding:7px 9px;border-radius:var(--radius-sm)">${escHtml(preview)}${item.body && item.body.length > 180 ? '…' : ''}</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
+      ${actionBtn}
       ${item.url ? `<button class="btn bsm" onclick="window.open('${item.url}','_blank')"><i class="ti ti-external-link"></i> View</button>` : ''}
       <button class="btn bsm bo" onclick="webAgentCopy('${item.id}')"><i class="ti ti-copy"></i> Copy</button>
     </div>
@@ -134,6 +165,15 @@ function webAgentRenderOpportunities() {
   const opps = webAgentQueue.filter(i => i.type === 'opportunity' && i.status !== 'dismissed');
   if (!opps.length) return '<div class="card" style="text-align:center;padding:30px;color:var(--text2)">No opportunities yet.</div>';
   return opps.map(webAgentRenderItem).join('');
+}
+
+function webAgentRenderAdminReview() {
+  const adminTypes = ['admin_task','admin_recommendation','task_assignment','job_abnormality','lead_followup','service_suggestion'];
+  const items = webAgentQueue
+    .filter(i => adminTypes.includes(i.type) && i.status !== 'dismissed')
+    .sort((a,b) => (a.priority || 9) - (b.priority || 9));
+  if (!items.length) return '<div class="card" style="text-align:center;padding:30px;color:var(--text2)">No admin alerts yet. Run a full scan to review tasks, jobs, CRM and next actions.</div>';
+  return items.map(webAgentRenderItem).join('');
 }
 
 function webAgentRenderHistory() {
@@ -270,6 +310,36 @@ async function webAgentDismiss(id) {
   await apiPut('/agent/queue', { queue: webAgentQueue, lastScan: webAgentLastScan });
   webAgentUpdateStats();
   webAgentRenderTab();
+}
+
+async function webAgentRunAction(id) {
+  const item = webAgentQueue.find(i => i.id === id);
+  if (!item || !item.action || !item.action.kind) return;
+  if (!confirm(`Approve AI action: ${item.action.label || item.title || 'Run action'}?`)) return;
+
+  try {
+    if (item.action.kind === 'create_task') {
+      const payload = item.action.payload || {};
+      if (!payload.title || !payload.assignedTo) {
+        ntf('AI action is missing task title or assignee');
+        return;
+      }
+      const data = await apiPost('/tasks', payload);
+      if (data && data.error) {
+        ntf(data.error);
+        return;
+      }
+      webAgentQueue = webAgentQueue.map(i => i.id === id ? { ...i, status: 'approved', approvedAt: Date.now() } : i);
+      await apiPut('/agent/queue', { queue: webAgentQueue, lastScan: webAgentLastScan });
+      ntf('Task created from AI recommendation');
+      webAgentUpdateStats();
+      webAgentRenderTab();
+      return;
+    }
+    ntf('This AI action is not supported yet');
+  } catch {
+    ntf('AI action failed');
+  }
 }
 
 async function webAgentReset() {
