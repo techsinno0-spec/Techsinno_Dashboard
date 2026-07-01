@@ -1,6 +1,7 @@
 const { app } = require('@azure/functions');
 const { getItem } = require('../../shared/cosmos');
 const { authenticate, jsonResponse, unauthorized, forbidden, badRequest, isOwner } = require('../../shared/auth');
+const { redirectBaseFromRequest } = require('../../shared/oauth-base');
 
 const ZOHO_BOOKS_SCOPES = [
   'ZohoBooks.invoices.READ',
@@ -42,11 +43,12 @@ app.http('zoho-books-connect', {
     const clientId = process.env.ZOHO_BOOKS_CLIENT_ID || cfg?.clientId;
     if (!clientId) return badRequest('Zoho Books Client ID not configured — add it in Settings');
 
-    const base = process.env.SOCIAL_REDIRECT_BASE || 'http://localhost:7071';
+    const base = redirectBaseFromRequest(request);
     const redirectUri = `${base}/api/zoho-books/callback`;
     const token = request.headers.get('authorization')?.replace('Bearer ', '') || request.headers.get('x-techsinno-token') || '';
     const state = Buffer.from(JSON.stringify({ jwt: token })).toString('base64url');
-    const region = getRegion(cfg?.region || 'com');
+    const urlParams = new URL(request.url).searchParams;
+    const region = getRegion(urlParams.get('region') || cfg?.region || 'com');
     const url = `${region.accounts}/oauth/v2/auth?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(ZOHO_BOOKS_SCOPES)}&access_type=offline&prompt=consent&state=${state}`;
 
     return jsonResponse({ url, redirectUri });

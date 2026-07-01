@@ -1,6 +1,7 @@
 const { app } = require('@azure/functions');
 const { verifyToken } = require('../../shared/auth');
 const { getEmailConfig, saveEmailConfig, GMAIL_TOKEN_URL, MS_TOKEN_URL, ZOHO_REGIONS } = require('../../shared/email');
+const { redirectBaseFromRequest } = require('../../shared/oauth-base');
 const axios = require('axios');
 
 app.http('email-callback', {
@@ -33,7 +34,7 @@ app.http('email-callback', {
       if (!decoded || decoded.role !== 'manager') return html('Unauthorized', false);
     } catch { return html('Invalid state', false); }
 
-    const base = process.env.SOCIAL_REDIRECT_BASE || 'http://localhost:7071';
+    const base = redirectBaseFromRequest(request);
 
     try {
       if (provider === 'gmail') {

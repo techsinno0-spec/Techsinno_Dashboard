@@ -1,6 +1,7 @@
 const { app } = require('@azure/functions');
 const { authenticate, jsonResponse, unauthorized, forbidden, badRequest } = require('../../shared/auth');
 const { getEmailConfig, GMAIL_AUTH_URL, GMAIL_SCOPES, MS_AUTH_URL, MS_SCOPES, ZOHO_REGIONS, ZOHO_SCOPES } = require('../../shared/email');
+const { redirectBaseFromRequest } = require('../../shared/oauth-base');
 
 app.http('email-connect', {
   methods: ['GET'],
@@ -12,7 +13,8 @@ app.http('email-connect', {
     if (decoded.role !== 'manager') return forbidden();
 
     const provider = request.params.provider;
-    const base = process.env.SOCIAL_REDIRECT_BASE || 'http://localhost:7071';
+    const base = redirectBaseFromRequest(request);
+    const urlParams = new URL(request.url).searchParams;
     const token = request.headers.get('authorization')?.replace('Bearer ', '');
     const state = Buffer.from(JSON.stringify({ jwt: token })).toString('base64url');
 
@@ -39,7 +41,8 @@ app.http('email-connect', {
       const clientId = process.env.ZOHO_MAIL_CLIENT_ID || cfg?.clientId;
       if (!clientId) return badRequest('Zoho Mail Client ID not configured — add it in Settings');
       const redirectUri = `${base}/api/email/callback/zoho_mail`;
-      const region = ZOHO_REGIONS[cfg?.region || 'com'] || ZOHO_REGIONS.com;
+      const regionKey = urlParams.get('region') || cfg?.region || 'com';
+      const region = ZOHO_REGIONS[regionKey] || ZOHO_REGIONS.com;
       const url = `${region.accounts}/oauth/v2/auth?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(ZOHO_SCOPES)}&access_type=offline&prompt=consent&state=${state}`;
       return jsonResponse({ url, redirectUri });
     }

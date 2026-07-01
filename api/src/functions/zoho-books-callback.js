@@ -2,6 +2,7 @@ const { app } = require('@azure/functions');
 const axios = require('axios');
 const { getItem, createItem, replaceItem } = require('../../shared/cosmos');
 const { verifyToken, isOwner } = require('../../shared/auth');
+const { redirectBaseFromRequest } = require('../../shared/oauth-base');
 
 const ZOHO_BOOKS_REGIONS = {
   com: { accounts: 'https://accounts.zoho.com', api: 'https://www.zohoapis.com/books/v3' },
@@ -73,7 +74,7 @@ app.http('zoho-books-callback', {
       const clientSecret = process.env.ZOHO_BOOKS_CLIENT_SECRET || cfg?.clientSecret;
       if (!clientId || !clientSecret) throw new Error('Zoho Books credentials not configured');
 
-      const base = process.env.SOCIAL_REDIRECT_BASE || 'http://localhost:7071';
+      const base = redirectBaseFromRequest(request);
       const redirectUri = `${base}/api/zoho-books/callback`;
       const location = url.searchParams.get('location');
       const regionMap = { us: 'com', eu: 'eu', in: 'in', au: 'au', jp: 'jp' };

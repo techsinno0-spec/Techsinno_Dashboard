@@ -186,9 +186,11 @@ async function connectServiceOAuth(key) {
   const saved = await saveServiceConfigIfEntered(key);
   if (!saved) return;
   try {
+    const regionValue = document.getElementById(`cfg-${key}-region`)?.value;
+    const regionQuery = regionValue ? `?region=${encodeURIComponent(regionValue)}` : '';
     const data = key === 'zoho_books'
-      ? await apiGet('/zoho-books/connect')
-      : await apiGet('/email/connect/' + key);
+      ? await apiGet('/zoho-books/connect' + regionQuery)
+      : await apiGet('/email/connect/' + key + regionQuery);
     if (!data?.url) { ntf('Failed to get authorization URL'); return; }
     if (data.redirectUri) {
       const redirectEl = document.getElementById(`cfg-redirect-${key}`);
