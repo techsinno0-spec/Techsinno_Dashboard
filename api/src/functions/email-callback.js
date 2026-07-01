@@ -1,7 +1,8 @@
 const { app } = require('@azure/functions');
-const { verifyToken } = require('../../shared/auth');
+const { isManagerOrOwner } = require('../../shared/auth');
 const { getEmailConfig, saveEmailConfig, GMAIL_TOKEN_URL, MS_TOKEN_URL, ZOHO_REGIONS } = require('../../shared/email');
 const { redirectBaseFromRequest } = require('../../shared/oauth-base');
+const { readOAuthState } = require('../../shared/oauth-state');
 const axios = require('axios');
 
 app.http('email-callback', {
@@ -29,10 +30,15 @@ app.http('email-callback', {
 
     let decoded;
     try {
-      const stateData = JSON.parse(Buffer.from(state, 'base64url').toString());
-      decoded = verifyToken(stateData.jwt);
-      if (!decoded || decoded.role !== 'manager') return html('Unauthorized', false);
-    } catch { return html('Invalid state', false); }
+      const stateData = await readOAuthState(state, provider);
+      decoded = {
+        sub: stateData.userId,
+        role: stateData.role,
+        accountRole: stateData.accountRole,
+        isOwner: stateData.isOwner
+      };
+      if (!isManagerOrOwner(decoded)) return html('Unauthorized', false);
+    } catch (err) { return html(err.message || 'Invalid state', false); }
 
     const base = redirectBaseFromRequest(request);
 

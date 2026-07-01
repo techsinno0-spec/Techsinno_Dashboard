@@ -1,8 +1,8 @@
 const { app } = require('@azure/functions');
 const axios = require('axios');
 const { getItem, createItem, replaceItem } = require('../../shared/cosmos');
-const { verifyToken, isOwner } = require('../../shared/auth');
 const { redirectBaseFromRequest } = require('../../shared/oauth-base');
+const { readOAuthState } = require('../../shared/oauth-state');
 
 const ZOHO_BOOKS_REGIONS = {
   com: { accounts: 'https://accounts.zoho.com', api: 'https://www.zohoapis.com/books/v3' },
@@ -61,11 +61,16 @@ app.http('zoho-books-callback', {
 
     let decoded;
     try {
-      const stateData = JSON.parse(Buffer.from(state, 'base64url').toString());
-      decoded = verifyToken(stateData.jwt);
-      if (!isOwner(decoded)) return html('zoho_books', 'Owner access required', false);
-    } catch {
-      return html('zoho_books', 'Invalid state', false);
+      const stateData = await readOAuthState(state, 'zoho_books');
+      decoded = {
+        sub: stateData.userId,
+        role: stateData.role,
+        accountRole: stateData.accountRole,
+        isOwner: stateData.isOwner
+      };
+      if (!decoded.isOwner) return html('zoho_books', 'Owner access required', false);
+    } catch (err) {
+      return html('zoho_books', err.message || 'Invalid state', false);
     }
 
     try {

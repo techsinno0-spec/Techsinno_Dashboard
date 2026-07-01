@@ -2,6 +2,7 @@ const { app } = require('@azure/functions');
 const { authenticate, jsonResponse, unauthorized, forbidden, badRequest } = require('../../shared/auth');
 const { getEmailConfig, GMAIL_AUTH_URL, GMAIL_SCOPES, MS_AUTH_URL, MS_SCOPES, ZOHO_REGIONS, ZOHO_SCOPES } = require('../../shared/email');
 const { redirectBaseFromRequest } = require('../../shared/oauth-base');
+const { createOAuthState } = require('../../shared/oauth-state');
 
 app.http('email-connect', {
   methods: ['GET'],
@@ -15,8 +16,7 @@ app.http('email-connect', {
     const provider = request.params.provider;
     const base = redirectBaseFromRequest(request);
     const urlParams = new URL(request.url).searchParams;
-    const token = request.headers.get('authorization')?.replace('Bearer ', '');
-    const state = Buffer.from(JSON.stringify({ jwt: token })).toString('base64url');
+    const state = await createOAuthState(provider, decoded);
 
     if (provider === 'gmail') {
       const cfg = await getEmailConfig('gmail');
