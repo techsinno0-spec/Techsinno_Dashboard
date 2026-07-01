@@ -1,6 +1,7 @@
 const { app } = require('@azure/functions');
 const { authenticate, jsonResponse, unauthorized, forbidden, badRequest } = require('../../shared/auth');
 const { getItem } = require('../../shared/cosmos');
+const { redirectBaseFromRequest } = require('../../shared/oauth-base');
 
 app.http('social-connect', {
   methods: ['GET'],
@@ -12,7 +13,7 @@ app.http('social-connect', {
     if (decoded.role !== 'manager') return forbidden();
 
     const platform = request.params.platform;
-    const base = process.env.SOCIAL_REDIRECT_BASE || 'http://localhost:7071';
+    const base = redirectBaseFromRequest(request);
     const token = request.headers.get('authorization')?.replace('Bearer ', '');
 
     if (platform === 'linkedin') {

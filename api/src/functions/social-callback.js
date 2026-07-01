@@ -2,6 +2,7 @@ const { app } = require('@azure/functions');
 const { verifyToken } = require('../../shared/auth');
 const { getItem, createItem, replaceItem } = require('../../shared/cosmos');
 const { getLongLivedMetaToken } = require('../../shared/social');
+const { redirectBaseFromRequest } = require('../../shared/oauth-base');
 const axios = require('axios');
 
 app.http('social-callback', {
@@ -34,7 +35,7 @@ app.http('social-callback', {
       if (!decoded || decoded.role !== 'manager') return html('Unauthorized', false);
     } catch { return html('Invalid state', false); }
 
-    const base = process.env.SOCIAL_REDIRECT_BASE || 'http://localhost:7071';
+    const base = redirectBaseFromRequest(request);
 
     try {
         if (platform === 'linkedin') {

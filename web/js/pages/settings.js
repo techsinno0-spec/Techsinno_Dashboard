@@ -29,6 +29,7 @@ const FIELD_LABELS = {
 
 const CONFIG_CACHE = {};
 const OAUTH_SERVICES = ['zoho_books', 'zoho_mail', 'gmail', 'outlook'];
+const PUBLIC_DASHBOARD_BASE = 'https://nice-bay-095935e10.7.azurestaticapps.net';
 
 async function render_settings() {
   if (!isOwner()) return;
@@ -116,8 +117,10 @@ function fieldInput(key, field) {
 }
 
 function cloudBaseForRedirect() {
-  if (window.__TECHSINNO_ELECTRON_API_BASE) return String(window.__TECHSINNO_ELECTRON_API_BASE).replace(/\/+$/, '');
-  if (location.protocol === 'file:' || location.origin === 'null') return 'https://nice-bay-095935e10.7.azurestaticapps.net';
+  const electronBase = window.__TECHSINNO_ELECTRON_API_BASE ? String(window.__TECHSINNO_ELECTRON_API_BASE).replace(/\/+$/, '') : '';
+  if (electronBase && !electronBase.includes('.azurewebsites.net')) return electronBase;
+  if (location.protocol === 'file:' || location.origin === 'null') return PUBLIC_DASHBOARD_BASE;
+  if (location.origin.includes('.azurewebsites.net')) return PUBLIC_DASHBOARD_BASE;
   return location.origin.replace(/\/+$/, '');
 }
 
