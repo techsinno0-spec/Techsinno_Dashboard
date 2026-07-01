@@ -166,7 +166,7 @@ async function render_dashboard() {
         <button class="btn bo bsm" onclick="window.open('https://www.linkedin.com','_blank')" style="display:flex;align-items:center;gap:5px"><i class="ti ti-brand-linkedin" style="color:#0a66c2"></i> LinkedIn</button>
         <button class="btn bo bsm" onclick="navigateTo('tasks')" style="display:flex;align-items:center;gap:5px"><i class="ti ti-checklist"></i> Tasks</button>
         <button class="btn bo bsm" onclick="navigateTo('zoho')" style="display:flex;align-items:center;gap:5px"><i class="ti ti-chart-bar"></i> Zoho</button>
-        <button class="btn bo bsm" onclick="navigateTo('agent')" style="display:flex;align-items:center;gap:5px;margin-left:auto"><i class="ti ti-robot" style="color:var(--brand-mid)"></i> Ask Claude</button>
+        <button class="btn bo bsm" onclick="openClaudeChat()" style="display:flex;align-items:center;gap:5px;margin-left:auto"><i class="ti ti-robot" style="color:var(--brand-mid)"></i> Ask Claude</button>
       </div>`;
 
       html += `<div class="g4" style="margin-bottom:14px">

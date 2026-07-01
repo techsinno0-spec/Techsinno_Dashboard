@@ -71,7 +71,30 @@ function getUserName(id) {
   return u ? u.displayName : id;
 }
 
+const AUTO_REFRESH_PAGES = new Set([
+  'dashboard',
+  'tasks',
+  'job-cards',
+  'goals',
+  'zoho',
+  'crm',
+  'quotes',
+  'social',
+  'marketing',
+  'reminders',
+  'team',
+  'staff-activity',
+  'task-reports'
+]);
+
 function refreshCurrentPageFromCloud() {
+  if (!AUTO_REFRESH_PAGES.has(currentPage)) return;
+  if (document.hidden) return;
+  if (document.querySelector('.modal-overlay.show')) return;
+
+  const active = document.activeElement;
+  if (active && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName)) return;
+
   const renderName = 'render_' + currentPage.replace(/-/g, '_');
   if (typeof window[renderName] === 'function') {
     window[renderName]();

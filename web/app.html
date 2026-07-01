@@ -18,7 +18,7 @@
   <!-- SIDEBAR -->
   <aside class="sidebar" id="sidebarEl">
     <div class="logo-area">
-      <div style="width:36px;height:36px;border-radius:7px;background:var(--brand);display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;font-size:16px;color:#fff;flex-shrink:0;">T</div>
+      <img src="assets/icon.png" alt="TECHSINNO logo" class="logo-img">
       <div>
         <div class="logo-text">TECHSINNO</div>
         <div class="logo-sub">Frank Muland</div>
@@ -138,6 +138,28 @@
   </div>
 </div>
 
+<!-- CLAUDE CHAT MODAL -->
+<div class="modal-overlay" id="claudeChatModal">
+  <div class="modal-box claude-chat-box">
+    <div class="claude-chat-head">
+      <div>
+        <h3><i class="ti ti-robot" style="color:var(--brand-mid)"></i> Ask Claude</h3>
+        <p>Ask about tasks, customers, follow-ups, quotes, or business operations.</p>
+      </div>
+      <button class="btn bo bsm" onclick="closeClaudeChat()" aria-label="Close Claude chat"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="claude-chat-messages" id="claudeChatMessages">
+      <div class="claude-msg assistant">
+        Hi Frank — tell me what you want to solve. I can help spot operational problems, draft outreach, plan follow-ups, or prioritise dashboard tasks.
+      </div>
+    </div>
+    <div class="claude-chat-compose">
+      <textarea id="claudeChatInput" placeholder="Ask Claude..." rows="2"></textarea>
+      <button class="btn" id="claudeChatSendBtn" onclick="sendClaudeChat()"><i class="ti ti-send"></i> Send</button>
+    </div>
+  </div>
+</div>
+
 <!-- NOTIFICATION TOAST -->
 <div class="ntf" id="ntf"></div>
 
@@ -204,6 +226,67 @@ async function submitChangePassword() {
     err.textContent = (data && data.error) || 'Failed to change password';
   }
 }
+
+const claudeChatHistory = [];
+
+function openClaudeChat() {
+  const modal = document.getElementById('claudeChatModal');
+  modal.classList.add('show');
+  setTimeout(() => document.getElementById('claudeChatInput')?.focus(), 60);
+}
+
+function closeClaudeChat() {
+  document.getElementById('claudeChatModal').classList.remove('show');
+}
+
+function appendClaudeMessage(role, text) {
+  const box = document.getElementById('claudeChatMessages');
+  const msg = document.createElement('div');
+  msg.className = 'claude-msg ' + role;
+  msg.innerHTML = escHtml(text || '').replace(/\n/g, '<br>');
+  box.appendChild(msg);
+  box.scrollTop = box.scrollHeight;
+}
+
+async function sendClaudeChat() {
+  const input = document.getElementById('claudeChatInput');
+  const btn = document.getElementById('claudeChatSendBtn');
+  const text = input.value.trim();
+  if (!text) return;
+
+  input.value = '';
+  appendClaudeMessage('user', text);
+  claudeChatHistory.push({ role: 'user', content: text });
+
+  btn.disabled = true;
+  const typingId = 'claudeTyping_' + Date.now();
+  const box = document.getElementById('claudeChatMessages');
+  box.insertAdjacentHTML('beforeend', `<div class="claude-msg assistant muted" id="${typingId}"><span class="spin"></span> Claude is thinking...</div>`);
+  box.scrollTop = box.scrollHeight;
+
+  try {
+    const data = await apiPost('/ai/chat', { messages: claudeChatHistory.slice(-10) });
+    document.getElementById(typingId)?.remove();
+    if (data && data.success) {
+      appendClaudeMessage('assistant', data.text || 'Done.');
+      claudeChatHistory.push({ role: 'assistant', content: data.text || '' });
+    } else {
+      appendClaudeMessage('assistant', (data && data.error) || 'Claude chat failed. Check the Claude key in Settings.');
+    }
+  } catch (err) {
+    document.getElementById(typingId)?.remove();
+    appendClaudeMessage('assistant', err.message || 'Claude chat failed.');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeClaudeChat();
+  if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && document.activeElement?.id === 'claudeChatInput') {
+    sendClaudeChat();
+  }
+});
 </script>
 </body>
 </html>

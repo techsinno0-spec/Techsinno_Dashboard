@@ -24,10 +24,11 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;hei
 .app{display:grid;grid-template-columns:200px 1fr;width:100%;height:100vh;overflow:hidden;}
 .sidebar{background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;}
 .logo-area{padding:14px 14px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:9px;flex-shrink:0;}
-.logo-img{width:36px;height:36px;border-radius:7px;flex-shrink:0;}
+.logo-img{width:36px;height:36px;border-radius:7px;flex-shrink:0;object-fit:contain;background:#fff;padding:2px;}
 .logo-text{font-family:'Syne',sans-serif;font-weight:800;font-size:13px;color:var(--brand-mid);}
 .logo-sub{font-size:9px;color:var(--text3);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.08em;}
-.nav-sec{font-size:9px;color:var(--text3);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.1em;padding:12px 14px 4px;}
+.nav-sec{font-size:9px;color:var(--text3);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.1em;padding:12px 14px 4px;display:flex;align-items:center;gap:6px;}
+.nav-sec i{font-size:11px;color:var(--brand-mid);opacity:.75;}
 .nav-item{display:flex;align-items:center;gap:8px;padding:8px 14px;cursor:pointer;color:var(--text2);font-size:12px;transition:all .15s;border-left:2px solid transparent;}
 .nav-item:hover{color:var(--text);background:rgba(255,255,255,.04);}
 .nav-item.active{color:var(--brand-mid);background:rgba(26,107,138,.1);border-left-color:var(--brand-mid);}
@@ -155,6 +156,20 @@ textarea{resize:vertical;min-height:60px;}
 .completion-opt i{font-size:20px;color:var(--brand-mid);flex-shrink:0;}
 .completion-opt .opt-title{font-weight:500;font-size:13px;color:var(--text);}
 .completion-opt .opt-desc{font-size:11px;color:var(--text2);margin-top:2px;}
+
+/* CLAUDE CHAT */
+.claude-chat-box{width:min(720px,92vw);height:min(680px,86vh);display:flex;flex-direction:column;padding:18px;}
+.claude-chat-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:12px;}
+.claude-chat-head h3{display:flex;align-items:center;gap:7px;margin-bottom:3px;}
+.claude-chat-head p{margin:0;font-size:11px;color:var(--text2);}
+.claude-chat-messages{flex:1;overflow-y:auto;padding:4px 4px 12px;display:flex;flex-direction:column;gap:8px;}
+.claude-msg{max-width:86%;padding:10px 12px;border:1px solid var(--border);border-radius:12px;font-size:12px;line-height:1.45;white-space:normal;}
+.claude-msg.assistant{align-self:flex-start;background:var(--bg3);color:var(--text);}
+.claude-msg.user{align-self:flex-end;background:var(--brand);border-color:rgba(95,168,196,.45);color:#fff;}
+.claude-msg.muted{color:var(--text2);display:flex;align-items:center;gap:8px;}
+.claude-chat-compose{display:flex;gap:8px;border-top:1px solid var(--border);padding-top:12px;}
+.claude-chat-compose textarea{flex:1;min-height:48px;max-height:110px;}
+.claude-chat-compose .btn{align-self:flex-end;display:flex;align-items:center;gap:6px;}
 
 /* ─── ZOHO STATS ────────────────────────────────────────────────── */
 .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:11px;margin-bottom:14px;}
