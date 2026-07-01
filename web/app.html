@@ -180,8 +180,13 @@ async function submitChangePassword() {
   const data = await changePassword(curr, newP);
   if (data && data.success) {
     const user = getUser();
-    user.mustChangePassword = false;
-    sessionStorage.setItem('ts_user', JSON.stringify(user));
+    if (user) {
+      user.mustChangePassword = false;
+      localStorage.setItem('ts_user', JSON.stringify(user));
+    }
+    document.getElementById('cpCurrent').value = '';
+    document.getElementById('cpNew').value = '';
+    document.getElementById('cpConfirm').value = '';
     document.getElementById('changePwModal').classList.remove('show');
     ntf('Password changed successfully');
   } else {
