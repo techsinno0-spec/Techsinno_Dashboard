@@ -37,6 +37,10 @@ function requireAuth() {
 function logout() {
   localStorage.removeItem('ts_token');
   localStorage.removeItem('ts_user');
+  if (window.techsinno && typeof window.techsinno.authLogout === 'function') {
+    window.techsinno.authLogout();
+    return;
+  }
   window.location.href = 'index.html';
 }
 async function changePassword(currentPassword, newPassword) {

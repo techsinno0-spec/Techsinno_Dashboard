@@ -1,6 +1,10 @@
 const API_BASE = '';
 let _refreshing = null;
 
+function isElectronShell() {
+  return !!(window.techsinno && typeof window.techsinno.apiCall === 'function');
+}
+
 async function ensureToken() {
   const token = localStorage.getItem('ts_token');
   if (!token) return;
@@ -20,6 +24,17 @@ async function ensureToken() {
 }
 
 async function apiCall(method, path, body = null) {
+  if (isElectronShell()) {
+    const data = await window.techsinno.apiCall(method, path, body);
+    if (data && data.error === 'Session expired') {
+      localStorage.removeItem('ts_token');
+      localStorage.removeItem('ts_user');
+      window.location.href = '../src/login.html';
+      return null;
+    }
+    return data;
+  }
+
   await ensureToken();
   const token = localStorage.getItem('ts_token');
   const headers = { 'Content-Type': 'application/json' };

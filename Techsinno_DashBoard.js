@@ -50,7 +50,7 @@ function createWindow() {
   const sessionUser = store.get('auth_user');
   const hasSession = store.get('auth_token') && ['owner', 'manager'].includes(sessionUser?.role);
   if (hasSession) {
-    mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
+    mainWindow.loadFile(path.join(__dirname, 'web', 'app.html'));
   } else {
     mainWindow.loadFile(path.join(__dirname, 'src', 'login.html'));
   }
@@ -104,6 +104,13 @@ ipcMain.handle('auth-logout', () => {
 ipcMain.handle('auth-get-user', () => {
   return store.get('auth_user', null);
 });
+
+ipcMain.handle('auth-get-session', () => ({
+  token: store.get('auth_token', ''),
+  user: store.get('auth_user', null),
+  apiBase: getApiBase(),
+  isElectron: true
+}));
 
 ipcMain.handle('auth-get-api-base', () => getApiBase());
 

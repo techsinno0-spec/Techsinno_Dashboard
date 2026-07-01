@@ -72,14 +72,22 @@ function getUserName(id) {
 }
 
 function refreshCurrentPageFromCloud() {
-  if (!isManager()) return;
   const renderName = 'render_' + currentPage.replace(/-/g, '_');
   if (typeof window[renderName] === 'function') {
     window[renderName]();
+    return;
+  }
+  const legacyRenderName = 'render_' + currentPage;
+  if (typeof window[legacyRenderName] === 'function') {
+    window[legacyRenderName]();
   }
 }
 
 async function initApp() {
+  if (window.__TECHSINNO_ELECTRON_BOOT) {
+    await window.__TECHSINNO_ELECTRON_BOOT;
+  }
+
   if (!requireAuth()) return;
   const user = getUser();
 
@@ -96,9 +104,7 @@ async function initApp() {
 
   navigateTo('dashboard');
 
-  if (isManager()) {
-    setInterval(refreshCurrentPageFromCloud, 30000);
-  }
+  setInterval(refreshCurrentPageFromCloud, 30000);
 }
 
 document.addEventListener('DOMContentLoaded', initApp);

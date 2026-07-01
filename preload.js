@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('techsinno', {
   authLogin:         (u, p) => ipcRenderer.invoke('auth-login', u, p),
   authLogout:        ()     => ipcRenderer.invoke('auth-logout'),
   authGetUser:       ()     => ipcRenderer.invoke('auth-get-user'),
+  authGetSession:    ()     => ipcRenderer.invoke('auth-get-session'),
   authGetApiBase:    ()     => ipcRenderer.invoke('auth-get-api-base'),
   authSetApiBase:    (url)  => ipcRenderer.invoke('auth-set-api-base', url),
   authChangePassword:(c, n) => ipcRenderer.invoke('auth-change-password', c, n),

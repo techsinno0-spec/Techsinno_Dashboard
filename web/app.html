@@ -142,6 +142,17 @@
 <div class="ntf" id="ntf"></div>
 
 <!-- JS MODULES -->
+<script>
+window.__TECHSINNO_ELECTRON_BOOT = (async () => {
+  if (!window.techsinno || typeof window.techsinno.authGetSession !== 'function') return;
+  const session = await window.techsinno.authGetSession().catch(() => null);
+  if (session && session.token && session.user) {
+    localStorage.setItem('ts_token', session.token);
+    localStorage.setItem('ts_user', JSON.stringify(session.user));
+    window.__TECHSINNO_ELECTRON_API_BASE = session.apiBase || '';
+  }
+})();
+</script>
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/router.js"></script>
