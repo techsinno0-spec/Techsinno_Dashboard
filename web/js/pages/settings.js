@@ -1,5 +1,5 @@
 const SERVICES = [
-  { key: 'zoho_books', label: 'Zoho Books', icon: 'ti-chart-bar', fields: ['clientId', 'clientSecret', 'orgId'], note: 'Bookkeeping, invoices, expenses, reports. Owner-only.' },
+  { key: 'zoho_books', label: 'Zoho Books', icon: 'ti-chart-bar', fields: ['clientId', 'clientSecret', 'region', 'orgId'], note: 'Bookkeeping, invoices, expenses, reports. Owner-only.' },
   { key: 'zoho_mail', label: 'Zoho Mail', icon: 'ti-mail', fields: ['clientId', 'clientSecret', 'region'], note: 'Primary company mailbox for customer replies and AI email scans.' },
   { key: 'gmail', label: 'Gmail', icon: 'ti-brand-gmail', fields: ['clientId', 'clientSecret'], note: 'Google mailbox connection for shared inbox workflows.' },
   { key: 'outlook', label: 'Outlook', icon: 'ti-brand-windows', fields: ['clientId', 'clientSecret'], note: 'Microsoft mailbox connection for shared inbox workflows.' },
@@ -28,6 +28,7 @@ const FIELD_LABELS = {
 };
 
 const CONFIG_CACHE = {};
+const OAUTH_SERVICES = ['zoho_books', 'zoho_mail', 'gmail', 'outlook'];
 
 async function render_settings() {
   if (!isOwner()) return;
@@ -77,9 +78,10 @@ function renderSettingsDetail(svc) {
       <div class="flbl">${FIELD_LABELS[f]}</div>
       ${fieldInput(svc.key, f)}
     `).join('')}
+    ${oauthRedirectHint(svc.key)}
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
       <button class="btn bsm" onclick="saveServiceConfig('${svc.key}')">Save</button>
-      ${['zoho_mail','gmail','outlook'].includes(svc.key) ? `<button class="btn bsm bo" onclick="connectServiceEmail('${svc.key}')">Connect / authorise</button>` : ''}
+      ${OAUTH_SERVICES.includes(svc.key) ? `<button class="btn bsm bo" onclick="connectServiceOAuth('${svc.key}')">Connect / authorise</button>` : ''}
     </div>
   </div>`;
 }
@@ -113,14 +115,89 @@ function fieldInput(key, field) {
   return `<input type="${type}" id="cfg-${key}-${field}" style="width:100%;margin-bottom:8px" placeholder="${FIELD_LABELS[field]}">`;
 }
 
-async function connectServiceEmail(key) {
-  await saveServiceConfig(key);
+function cloudBaseForRedirect() {
+  if (window.__TECHSINNO_ELECTRON_API_BASE) return String(window.__TECHSINNO_ELECTRON_API_BASE).replace(/\/+$/, '');
+  if (location.protocol === 'file:' || location.origin === 'null') return 'https://nice-bay-095935e10.7.azurestaticapps.net';
+  return location.origin.replace(/\/+$/, '');
+}
+
+function oauthRedirectPath(key) {
+  return {
+    zoho_books: '/api/zoho-books/callback',
+    zoho_mail: '/api/email/callback/zoho_mail',
+    gmail: '/api/email/callback/gmail',
+    outlook: '/api/email/callback/outlook'
+  }[key] || '';
+}
+
+function oauthRedirectUri(key) {
+  const path = oauthRedirectPath(key);
+  return path ? cloudBaseForRedirect() + path : '';
+}
+
+function oauthRedirectHint(key) {
+  if (!OAUTH_SERVICES.includes(key)) return '';
+  const uri = oauthRedirectUri(key);
+  const provider = key.startsWith('zoho') ? 'Zoho API Console' : (key === 'gmail' ? 'Google Cloud Console' : 'Microsoft Azure app registration');
+  return `<div class="ri" style="align-items:flex-start;margin:2px 0 10px">
+    <i class="ti ti-link" style="color:var(--brand-mid);font-size:13px;flex-shrink:0;margin-top:2px"></i>
+    <div style="min-width:0;flex:1">
+      <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;letter-spacing:.08em;text-transform:uppercase">Redirect URI for ${provider}</div>
+      <code id="cfg-redirect-${key}" style="display:block;overflow:auto;margin-top:4px;color:var(--brand-mid);font-size:11px">${uri}</code>
+    </div>
+    <button class="btn bsm bo" type="button" onclick="copyOAuthRedirect('${key}')">Copy</button>
+  </div>`;
+}
+
+async function copyOAuthRedirect(key) {
+  const text = document.getElementById(`cfg-redirect-${key}`)?.textContent || oauthRedirectUri(key);
   try {
-    const data = await apiGet('/email/connect/' + key);
+    await navigator.clipboard.writeText(text);
+    ntf('Redirect URI copied');
+  } catch {
+    ntf(text);
+  }
+}
+
+function collectServiceConfig(key) {
+  const svc = SERVICES.find(s => s.key === key);
+  const body = {};
+  svc.fields.forEach(f => {
+    const input = document.getElementById(`cfg-${key}-${f}`);
+    const v = input ? input.value.trim() : '';
+    if (v) body[f] = v;
+  });
+  return body;
+}
+
+async function saveServiceConfigIfEntered(key) {
+  const body = collectServiceConfig(key);
+  if (Object.keys(body).length === 0) return true;
+  const data = await apiPut(`/config/${key}`, body);
+  if (data && data.success) {
+    loadServiceConfig(key);
+    return true;
+  }
+  ntf((data && data.error) || 'Save failed');
+  return false;
+}
+
+async function connectServiceOAuth(key) {
+  const saved = await saveServiceConfigIfEntered(key);
+  if (!saved) return;
+  try {
+    const data = key === 'zoho_books'
+      ? await apiGet('/zoho-books/connect')
+      : await apiGet('/email/connect/' + key);
     if (!data?.url) { ntf('Failed to get authorization URL'); return; }
-    const popup = window.open(data.url, 'email_auth', 'width=600,height=700,scrollbars=yes');
+    if (data.redirectUri) {
+      const redirectEl = document.getElementById(`cfg-redirect-${key}`);
+      if (redirectEl) redirectEl.textContent = data.redirectUri;
+    }
+    const popup = window.open(data.url, `${key}_auth`, 'width=640,height=760,scrollbars=yes');
+    const expectedType = key === 'zoho_books' ? 'zoho-books-auth' : 'email-auth';
     window.addEventListener('message', function handler(e) {
-      if (e.data?.type === 'email-auth') {
+      if (e.data?.type === expectedType) {
         window.removeEventListener('message', handler);
         if (e.data.success) {
           ntf(e.data.message || 'Connected!');
@@ -134,6 +211,10 @@ async function connectServiceEmail(key) {
   } catch {
     ntf('Failed to initiate connection');
   }
+}
+
+async function connectServiceEmail(key) {
+  return connectServiceOAuth(key);
 }
 
 async function loadServiceConfig(key) {
@@ -205,12 +286,7 @@ function toggleServiceConfig(key) {
 
 async function saveServiceConfig(key) {
   const svc = SERVICES.find(s => s.key === key);
-  const body = {};
-  svc.fields.forEach(f => {
-    const input = document.getElementById(`cfg-${key}-${f}`);
-    const v = input ? input.value.trim() : '';
-    if (v) body[f] = v;
-  });
+  const body = collectServiceConfig(key);
 
   if (Object.keys(body).length === 0) { ntf('Enter at least one field'); return; }
 
