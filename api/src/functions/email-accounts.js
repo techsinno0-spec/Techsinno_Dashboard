@@ -2,6 +2,21 @@ const { app } = require('@azure/functions');
 const { authenticate, jsonResponse, unauthorized, forbidden } = require('../../shared/auth');
 const { getEmailConfig } = require('../../shared/email');
 
+const TECHSINNO_ZOHO_ALIASES = [
+  { address: 'frank@techsinno.com', name: 'Frank', isDefault: true },
+  { address: 'info@techsinno.com', name: 'Info', isDefault: false },
+  { address: 'sales@techsinno.com', name: 'Sales', isDefault: false }
+];
+
+function mergeTechsinnoAliases(aliases = []) {
+  const existing = Array.isArray(aliases) ? aliases.filter(a => a?.address) : [];
+  const byAddress = new Map(existing.map(a => [String(a.address).toLowerCase(), a]));
+  TECHSINNO_ZOHO_ALIASES.forEach(alias => {
+    if (!byAddress.has(alias.address)) byAddress.set(alias.address, alias);
+  });
+  return Array.from(byAddress.values());
+}
+
 app.http('email-accounts', {
   methods: ['GET'],
   authLevel: 'anonymous',
@@ -25,7 +40,7 @@ app.http('email-accounts', {
 
     const zoho = await getEmailConfig('zoho_mail');
     accounts.zoho_mail = zoho?.accessToken
-      ? { connected: true, email: zoho.email || 'Zoho Mail', displayName: zoho.email || 'Zoho User', aliases: zoho.aliases || [] }
+      ? { connected: true, email: zoho.email || 'Zoho Mail', displayName: zoho.email || 'Zoho User', aliases: mergeTechsinnoAliases(zoho.aliases) }
       : { connected: false };
 
     return jsonResponse({ accounts });

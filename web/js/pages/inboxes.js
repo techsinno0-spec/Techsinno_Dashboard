@@ -1,7 +1,34 @@
 let _emailAccounts = null;
 let _activeProvider = null;
 let _activeFolder = 'inbox';
+let _activeZohoRecipient = 'all';
 let _currentMessages = [];
+
+const ZOHO_RECIPIENT_FOLDERS = [
+  { key: 'all', label: 'All', address: '', icon: 'ti-mailbox' },
+  { key: 'frank', label: 'Frank', address: 'frank@techsinno.com', icon: 'ti-user' },
+  { key: 'info', label: 'Info', address: 'info@techsinno.com', icon: 'ti-info-circle' },
+  { key: 'sales', label: 'Sales', address: 'sales@techsinno.com', icon: 'ti-cash' }
+];
+
+function zohoRecipientAddress(key) {
+  return ZOHO_RECIPIENT_FOLDERS.find(f => f.key === key)?.address || '';
+}
+
+function zohoRecipientFolderForMessage(toText) {
+  const normalized = String(toText || '').toLowerCase();
+  return ZOHO_RECIPIENT_FOLDERS.find(f => f.address && normalized.includes(f.address));
+}
+
+function renderZohoRecipientTabs(activeKey) {
+  return `<div class="wtabs" style="margin:0 0 12px">
+    ${ZOHO_RECIPIENT_FOLDERS.map(f => `
+      <button class="wtab ${activeKey === f.key ? 'active' : ''}" onclick="loadInbox('zoho_mail','inbox','${f.key}')">
+        <i class="ti ${f.icon}" style="font-size:12px;margin-right:4px"></i>${f.address || f.label}
+      </button>
+    `).join('')}
+  </div>`;
+}
 
 async function render_inboxes() {
   if (!isManager()) return;
@@ -131,11 +158,17 @@ async function disconnectEmail(provider) {
 async function openProviderInbox(provider) {
   _activeProvider = provider;
   _activeFolder = 'inbox';
-  await loadInbox(provider, 'inbox');
+  if (provider === 'zoho_mail') _activeZohoRecipient = 'all';
+  await loadInbox(provider, 'inbox', provider === 'zoho_mail' ? _activeZohoRecipient : 'all');
 }
 
-async function loadInbox(provider, folder) {
+async function loadInbox(provider, folder, recipientKey) {
   _activeFolder = folder;
+  const activeRecipient = provider === 'zoho_mail' && folder === 'inbox'
+    ? (recipientKey || _activeZohoRecipient || 'all')
+    : 'all';
+  if (provider === 'zoho_mail' && folder === 'inbox') _activeZohoRecipient = activeRecipient;
+
   const area = document.getElementById('emailInboxArea');
   if (!area) return;
 
@@ -155,18 +188,23 @@ async function loadInbox(provider, folder) {
         <button class="btn bsm bo" onclick="openComposeModal('${provider}')"><i class="ti ti-pencil" style="font-size:11px;margin-right:3px"></i> Compose</button>
       </div>
     </div>
+    ${provider === 'zoho_mail' && folder === 'inbox' ? renderZohoRecipientTabs(activeRecipient) : ''}
     <div id="emailMessageList"><div class="spin"></div></div>
     <div id="emailReadPane" style="display:none"></div>`;
 
   try {
-    const data = await apiGet(`/email/inbox/${provider}?folder=${folder}`);
+    let path = `/email/inbox/${provider}?folder=${folder}`;
+    const recipientAddress = provider === 'zoho_mail' && folder === 'inbox' ? zohoRecipientAddress(activeRecipient) : '';
+    if (recipientAddress) path += `&recipient=${encodeURIComponent(recipientAddress)}`;
+    const data = await apiGet(path);
     if (data.error) { document.getElementById('emailMessageList').innerHTML = `<div class="empty-state" style="padding:20px"><i class="ti ti-alert-circle"></i><div style="font-size:12px;color:#f85149">${escHtml(data.error)}</div></div>`; return; }
 
     _currentMessages = data.messages || [];
     const unread = data.unreadCount || 0;
 
     if (_currentMessages.length === 0) {
-      document.getElementById('emailMessageList').innerHTML = `<div class="empty-state" style="padding:30px"><i class="ti ti-inbox-off" style="font-size:24px"></i><div style="font-size:12px;color:var(--text3);margin-top:6px">No messages</div></div>`;
+      const emptyText = recipientAddress ? `No messages sent to ${recipientAddress}` : 'No messages';
+      document.getElementById('emailMessageList').innerHTML = `<div class="empty-state" style="padding:30px"><i class="ti ti-inbox-off" style="font-size:24px"></i><div style="font-size:12px;color:var(--text3);margin-top:6px">${escHtml(emptyText)}</div></div>`;
       return;
     }
 
@@ -176,6 +214,10 @@ async function loadInbox(provider, folder) {
       const senderShort = sender.replace(/<.*>/, '').trim() || sender;
       const dateStr = m.date ? timeAgo(m.date) : '';
       const unreadStyle = m.unread ? 'font-weight:600;color:var(--text)' : 'color:var(--text2)';
+      const zohoFolder = provider === 'zoho_mail' && folder === 'inbox' ? zohoRecipientFolderForMessage(m.to) : null;
+      const recipientBadge = zohoFolder
+        ? `<span class="tag t-a" style="font-size:8px;margin-left:6px;flex-shrink:0">${escHtml(zohoFolder.address)}</span>`
+        : '';
 
       rows += `<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s" onmouseover="this.style.background='var(--card-hover)'" onmouseout="this.style.background=''" onclick="readEmailMessage('${provider}','${m.id}',${i})">
         ${m.unread ? '<div style="width:6px;height:6px;border-radius:50%;background:var(--brand-mid);flex-shrink:0"></div>' : '<div style="width:6px;flex-shrink:0"></div>'}
@@ -184,7 +226,10 @@ async function loadInbox(provider, folder) {
             <div style="font-size:12px;${unreadStyle};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px">${escHtml(senderShort)}</div>
             <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;flex-shrink:0">${dateStr}</div>
           </div>
-          <div style="font-size:12px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px">${escHtml(m.subject)}</div>
+          <div style="display:flex;align-items:center;gap:4px;margin-top:2px;min-width:0">
+            <span style="font-size:12px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(m.subject)}</span>
+            ${recipientBadge}
+          </div>
         </div>
       </div>`;
     });
@@ -368,7 +413,7 @@ async function sendEmailFromCompose(provider) {
     } else {
       ntf('Email sent!');
       closeComposeModal();
-      if (_activeProvider === provider) loadInbox(provider, _activeFolder);
+      if (_activeProvider === provider) loadInbox(provider, _activeFolder, _activeZohoRecipient);
     }
   } catch {
     err.textContent = 'Failed to send email';

@@ -2,6 +2,21 @@ const { app } = require('@azure/functions');
 const { authenticate, jsonResponse, unauthorized, forbidden, badRequest } = require('../../shared/auth');
 const { getEmailConfig, gmailGet, msGet, zohoGet } = require('../../shared/email');
 
+const ZOHO_ALIAS_RECIPIENTS = [
+  'frank@techsinno.com',
+  'info@techsinno.com',
+  'sales@techsinno.com'
+];
+
+function zohoRecipientText(message) {
+  return [
+    message.toAddress,
+    message.ccAddress,
+    message.bccAddress,
+    message.recipientAddress
+  ].filter(Boolean).join(' ').toLowerCase();
+}
+
 app.http('email-inbox', {
   methods: ['GET'],
   authLevel: 'anonymous',
@@ -14,6 +29,7 @@ app.http('email-inbox', {
     const provider = request.params.provider;
     const url = new URL(request.url);
     const folder = url.searchParams.get('folder') || 'inbox';
+    const recipient = (url.searchParams.get('recipient') || '').trim().toLowerCase();
 
     try {
       if (provider === 'gmail') {
@@ -84,6 +100,7 @@ app.http('email-inbox', {
       if (provider === 'zoho_mail') {
         const cfg = await getEmailConfig('zoho_mail');
         if (!cfg?.accessToken || !cfg?.accountId) return badRequest('Zoho Mail not connected');
+        const recipientFilter = ZOHO_ALIAS_RECIPIENTS.includes(recipient) ? recipient : '';
 
         let folderId;
         try {
@@ -96,16 +113,20 @@ app.http('email-inbox', {
 
         if (folder === 'sent' && !folderId) return jsonResponse({ success: true, messages: [] });
 
-        const params = { limit: 20 };
+        const params = { limit: recipientFilter ? 60 : 20 };
         if (folderId) params.folderId = folderId;
         const data = await zohoGet(cfg, `/accounts/${cfg.accountId}/messages/view`, params);
-        const msgs = data.data || [];
+        const allMsgs = data.data || [];
+        const msgs = recipientFilter
+          ? allMsgs.filter(m => zohoRecipientText(m).includes(recipientFilter))
+          : allMsgs;
 
         return jsonResponse({
           success: true,
           email: cfg.email,
+          recipient: recipientFilter,
           unreadCount: folder === 'inbox' ? msgs.filter(m => !m.isRead).length : 0,
-          messages: msgs.map(m => ({
+          messages: msgs.slice(0, 30).map(m => ({
             id: m.messageId, subject: m.subject || '(no subject)',
             from: m.fromAddress || '', to: m.toAddress || '',
             date: m.receivedTime ? new Date(parseInt(m.receivedTime)).toISOString() : '',
