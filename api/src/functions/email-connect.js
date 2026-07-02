@@ -16,13 +16,13 @@ app.http('email-connect', {
     const provider = request.params.provider;
     const base = redirectBaseFromRequest(request);
     const urlParams = new URL(request.url).searchParams;
-    const state = await createOAuthState(provider, decoded);
 
     if (provider === 'gmail') {
       const cfg = await getEmailConfig('gmail');
       const clientId = process.env.GMAIL_CLIENT_ID || cfg?.clientId;
       if (!clientId) return badRequest('Gmail Client ID not configured — add it in Settings');
       const redirectUri = `${base}/api/email/callback/gmail`;
+      const state = await createOAuthState(provider, decoded, { redirectUri });
       const url = `${GMAIL_AUTH_URL}?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(GMAIL_SCOPES)}&access_type=offline&prompt=consent&state=${state}`;
       return jsonResponse({ url, redirectUri });
     }
@@ -32,6 +32,7 @@ app.http('email-connect', {
       const clientId = process.env.MS_CLIENT_ID || cfg?.clientId;
       if (!clientId) return badRequest('Outlook Client ID not configured — add it in Settings');
       const redirectUri = `${base}/api/email/callback/outlook`;
+      const state = await createOAuthState(provider, decoded, { redirectUri });
       const url = `${MS_AUTH_URL}?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(MS_SCOPES)}&response_mode=query&state=${state}`;
       return jsonResponse({ url, redirectUri });
     }
@@ -43,6 +44,7 @@ app.http('email-connect', {
       const redirectUri = `${base}/api/email/callback/zoho_mail`;
       const regionKey = urlParams.get('region') || cfg?.region || 'com';
       const region = ZOHO_REGIONS[regionKey] || ZOHO_REGIONS.com;
+      const state = await createOAuthState(provider, decoded, { redirectUri, region: regionKey });
       const url = `${region.accounts}/oauth/v2/auth?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(ZOHO_SCOPES)}&access_type=offline&prompt=consent&state=${state}`;
       return jsonResponse({ url, redirectUri });
     }

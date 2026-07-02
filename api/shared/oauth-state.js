@@ -11,7 +11,7 @@ function decodeState(state) {
   return JSON.parse(Buffer.from(state, 'base64url').toString());
 }
 
-async function createOAuthState(provider, decoded) {
+async function createOAuthState(provider, decoded, context = {}) {
   const sid = crypto.randomBytes(24).toString('base64url');
   const id = `oauth_state_${sid}`;
   const now = Date.now();
@@ -23,6 +23,7 @@ async function createOAuthState(provider, decoded) {
     role: decoded.role,
     accountRole: decoded.accountRole || decoded.role,
     isOwner: !!(decoded.isOwner || decoded.accountRole === 'owner'),
+    context,
     createdAt: new Date(now).toISOString(),
     expiresAt: new Date(now + STATE_TTL_MS).toISOString()
   });

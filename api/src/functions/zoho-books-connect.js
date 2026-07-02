@@ -46,9 +46,10 @@ app.http('zoho-books-connect', {
 
     const base = redirectBaseFromRequest(request);
     const redirectUri = `${base}/api/zoho-books/callback`;
-    const state = await createOAuthState('zoho_books', decoded);
     const urlParams = new URL(request.url).searchParams;
-    const region = getRegion(urlParams.get('region') || cfg?.region || 'com');
+    const regionKey = urlParams.get('region') || cfg?.region || 'com';
+    const region = getRegion(regionKey);
+    const state = await createOAuthState('zoho_books', decoded, { redirectUri, region: regionKey });
     const url = `${region.accounts}/oauth/v2/auth?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(ZOHO_BOOKS_SCOPES)}&access_type=offline&prompt=consent&state=${state}`;
 
     return jsonResponse({ url, redirectUri });

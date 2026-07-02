@@ -5,6 +5,13 @@ const { redirectBaseFromRequest } = require('../../shared/oauth-base');
 const { readOAuthState } = require('../../shared/oauth-state');
 const axios = require('axios');
 
+function zohoTokenError(err, region, redirectUri) {
+  const data = err.response?.data;
+  const code = data?.error || data?.error_code || err.response?.status || 'unknown_error';
+  const detail = data?.error_description || data?.message || (typeof data === 'string' ? data : '') || err.message;
+  return `Zoho token exchange failed (${region}, ${redirectUri}): ${code}${detail ? ' - ' + detail : ''}`;
+}
+
 app.http('email-callback', {
   methods: ['GET'],
   authLevel: 'anonymous',
@@ -29,8 +36,9 @@ app.http('email-callback', {
     if (!code || !state) return html('Missing authorization code', false);
 
     let decoded;
+    let stateData;
     try {
-      const stateData = await readOAuthState(state, provider);
+      stateData = await readOAuthState(state, provider);
       decoded = {
         sub: stateData.userId,
         role: stateData.role,
@@ -49,7 +57,7 @@ app.http('email-callback', {
         const clientSecret = process.env.GMAIL_CLIENT_SECRET || cfg?.clientSecret;
         if (!clientId || !clientSecret) throw new Error('Gmail credentials not configured');
 
-        const redirectUri = `${base}/api/email/callback/gmail`;
+        const redirectUri = stateData.context?.redirectUri || `${base}/api/email/callback/gmail`;
         const p = new URLSearchParams({
           code, grant_type: 'authorization_code',
           client_id: clientId, client_secret: clientSecret,
@@ -84,7 +92,7 @@ app.http('email-callback', {
         const clientSecret = process.env.MS_CLIENT_SECRET || cfg?.clientSecret;
         if (!clientId || !clientSecret) throw new Error('Outlook credentials not configured');
 
-        const redirectUri = `${base}/api/email/callback/outlook`;
+        const redirectUri = stateData.context?.redirectUri || `${base}/api/email/callback/outlook`;
         const p = new URLSearchParams({
           code, grant_type: 'authorization_code',
           client_id: clientId, client_secret: clientSecret,
@@ -119,15 +127,16 @@ app.http('email-callback', {
         const clientSecret = process.env.ZOHO_MAIL_CLIENT_SECRET || cfg?.clientSecret;
         if (!clientId || !clientSecret) throw new Error('Zoho Mail credentials not configured');
 
-        const redirectUri = `${base}/api/email/callback/zoho_mail`;
+        const redirectUri = stateData.context?.redirectUri || `${base}/api/email/callback/zoho_mail`;
         const location = url.searchParams.get('location');
-        let detectedRegion = cfg?.region || 'com';
+        let detectedRegion = stateData.context?.region || cfg?.region || 'com';
         if (location) {
           const regionMap = { us: 'com', eu: 'eu', in: 'in', au: 'au', jp: 'jp' };
           detectedRegion = regionMap[location.toLowerCase()] || location.toLowerCase();
         }
 
         let tokenData = null;
+        const tokenErrors = [];
         const regionsToTry = [detectedRegion];
         ['com', 'eu', 'in', 'au', 'jp'].forEach(r => { if (!regionsToTry.includes(r)) regionsToTry.push(r); });
 
@@ -147,10 +156,12 @@ app.http('email-callback', {
               detectedRegion = region;
               break;
             }
-          } catch {}
+          } catch (err) {
+            tokenErrors.push(zohoTokenError(err, region, redirectUri));
+          }
         }
 
-        if (!tokenData?.access_token) throw new Error('Token exchange failed — check Client ID and Secret');
+        if (!tokenData?.access_token) throw new Error(tokenErrors[0] || 'Zoho token exchange returned no access token');
 
         const updates = {
           accessToken: tokenData.access_token,

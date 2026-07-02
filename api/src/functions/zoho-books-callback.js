@@ -4,6 +4,13 @@ const { getItem, createItem, replaceItem } = require('../../shared/cosmos');
 const { redirectBaseFromRequest } = require('../../shared/oauth-base');
 const { readOAuthState } = require('../../shared/oauth-state');
 
+function zohoTokenError(err, region, redirectUri) {
+  const data = err.response?.data;
+  const code = data?.error || data?.error_code || err.response?.status || 'unknown_error';
+  const detail = data?.error_description || data?.message || (typeof data === 'string' ? data : '') || err.message;
+  return `Zoho Books token exchange failed (${region}, ${redirectUri}): ${code}${detail ? ' - ' + detail : ''}`;
+}
+
 const ZOHO_BOOKS_REGIONS = {
   com: { accounts: 'https://accounts.zoho.com', api: 'https://www.zohoapis.com/books/v3' },
   eu: { accounts: 'https://accounts.zoho.eu', api: 'https://www.zohoapis.eu/books/v3' },
@@ -60,8 +67,9 @@ app.http('zoho-books-callback', {
     if (!code || !state) return html('zoho_books', 'Missing authorization code', false);
 
     let decoded;
+    let stateData;
     try {
-      const stateData = await readOAuthState(state, 'zoho_books');
+      stateData = await readOAuthState(state, 'zoho_books');
       decoded = {
         sub: stateData.userId,
         role: stateData.role,
@@ -80,14 +88,15 @@ app.http('zoho-books-callback', {
       if (!clientId || !clientSecret) throw new Error('Zoho Books credentials not configured');
 
       const base = redirectBaseFromRequest(request);
-      const redirectUri = `${base}/api/zoho-books/callback`;
+      const redirectUri = stateData.context?.redirectUri || `${base}/api/zoho-books/callback`;
       const location = url.searchParams.get('location');
       const regionMap = { us: 'com', eu: 'eu', in: 'in', au: 'au', jp: 'jp' };
-      let detectedRegion = regionMap[(location || '').toLowerCase()] || cfg?.region || 'com';
+      let detectedRegion = regionMap[(location || '').toLowerCase()] || stateData.context?.region || cfg?.region || 'com';
       const regionsToTry = [detectedRegion];
       ['com', 'eu', 'in', 'au', 'jp'].forEach(r => { if (!regionsToTry.includes(r)) regionsToTry.push(r); });
 
       let tokenData = null;
+      const tokenErrors = [];
       for (const regionKey of regionsToTry) {
         try {
           const region = getRegion(regionKey);
@@ -106,10 +115,12 @@ app.http('zoho-books-callback', {
             detectedRegion = regionKey;
             break;
           }
-        } catch {}
+        } catch (err) {
+          tokenErrors.push(zohoTokenError(err, regionKey, redirectUri));
+        }
       }
 
-      if (!tokenData?.access_token) throw new Error('Token exchange failed — check Client ID, Client Secret, region, and redirect URI');
+      if (!tokenData?.access_token) throw new Error(tokenErrors[0] || 'Zoho Books token exchange returned no access token');
 
       const updates = {
         accessToken: tokenData.access_token,
