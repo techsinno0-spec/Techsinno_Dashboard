@@ -66,6 +66,44 @@ async function loadUsers() {
   if (data && data.users) appUsers = data.users;
 }
 
+function setZohoHeaderPill(state, label) {
+  const pill = document.querySelector('.zoho-pill');
+  if (!pill) return;
+
+  pill.textContent = label;
+  pill.classList.remove('connected', 'partial', 'offline');
+  pill.classList.add(state);
+}
+
+async function updateZohoHeaderStatus() {
+  const pill = document.querySelector('.zoho-pill');
+  if (!pill) return;
+
+  try {
+    const [booksResult, mailResult] = await Promise.allSettled([
+      apiGet('/config/zoho_books'),
+      apiGet('/config/zoho_mail')
+    ]);
+
+    const books = booksResult.status === 'fulfilled' ? booksResult.value?.config : null;
+    const mail = mailResult.status === 'fulfilled' ? mailResult.value?.config : null;
+    const booksConnected = !!books?.connected;
+    const mailConnected = !!mail?.connected;
+
+    if (booksConnected && mailConnected) {
+      setZohoHeaderPill('connected', 'Zoho: connected');
+    } else if (booksConnected) {
+      setZohoHeaderPill('partial', 'Zoho: Books connected');
+    } else if (mailConnected) {
+      setZohoHeaderPill('partial', 'Zoho: Mail connected');
+    } else {
+      setZohoHeaderPill('offline', 'Zoho: offline');
+    }
+  } catch {
+    setZohoHeaderPill('offline', 'Zoho: offline');
+  }
+}
+
 function getUserName(id) {
   const u = appUsers.find(u => u.id === id);
   return u ? u.displayName : id;
@@ -125,9 +163,12 @@ async function initApp() {
 
   if (isManager()) await loadUsers();
 
+  updateZohoHeaderStatus();
+
   navigateTo('dashboard');
 
   setInterval(refreshCurrentPageFromCloud, 30000);
+  setInterval(updateZohoHeaderStatus, 30000);
 }
 
 document.addEventListener('DOMContentLoaded', initApp);

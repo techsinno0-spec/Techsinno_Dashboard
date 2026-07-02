@@ -179,6 +179,7 @@ async function saveServiceConfigIfEntered(key) {
   const data = await apiPut(`/config/${key}`, body);
   if (data && data.success) {
     loadServiceConfig(key);
+    if (key.startsWith('zoho') && typeof updateZohoHeaderStatus === 'function') updateZohoHeaderStatus();
     return true;
   }
   ntf((data && data.error) || 'Save failed');
@@ -207,6 +208,7 @@ async function connectServiceOAuth(key) {
         if (e.data.success) {
           ntf(e.data.message || 'Connected!');
           loadServiceConfig(key);
+          if (key.startsWith('zoho') && typeof updateZohoHeaderStatus === 'function') updateZohoHeaderStatus();
         } else {
           ntf(e.data.message || 'Connection failed');
         }
@@ -229,6 +231,7 @@ async function loadServiceConfig(key) {
     const cfg = data && data.config;
     CONFIG_CACHE[key] = cfg || {};
     setConfigBadge(key, cfg);
+    if (key.startsWith('zoho') && typeof updateZohoHeaderStatus === 'function') updateZohoHeaderStatus();
 
     const svc = SERVICES.find(s => s.key === key);
     svc.fields.forEach(f => {
@@ -300,6 +303,7 @@ async function saveServiceConfig(key) {
     if (data && data.success) {
       ntf(`${svc.label} saved`);
       loadServiceConfig(key);
+      if (key.startsWith('zoho') && typeof updateZohoHeaderStatus === 'function') updateZohoHeaderStatus();
     } else {
       ntf((data && data.error) || 'Save failed');
     }

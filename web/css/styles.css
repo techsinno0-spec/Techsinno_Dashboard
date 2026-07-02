@@ -49,6 +49,9 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;hei
 .date-pill{font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);background:var(--bg3);border:1px solid var(--border);padding:5px 10px;border-radius:var(--radius-sm);}
 .cloud-pill{color:var(--text2);}
 .zoho-pill{color:var(--accent);background:rgba(244,163,0,.08);border-color:rgba(244,163,0,.25);}
+.zoho-pill.connected{color:#3fb950;background:rgba(63,185,80,.1);border-color:rgba(63,185,80,.35);}
+.zoho-pill.partial{color:var(--accent);background:rgba(244,163,0,.1);border-color:rgba(244,163,0,.35);}
+.zoho-pill.offline{color:var(--accent);background:rgba(244,163,0,.08);border-color:rgba(244,163,0,.25);}
 .content{flex:1;overflow-y:auto;padding:18px 22px;}
 .page{display:none;animation:fi .2s ease;}
 .page.active{display:block;}
