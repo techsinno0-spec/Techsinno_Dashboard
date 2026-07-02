@@ -30,6 +30,121 @@ function renderZohoRecipientTabs(activeKey) {
   </div>`;
 }
 
+function jsArg(value) {
+  return JSON.stringify(String(value ?? ''))
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function linkifyPlainEmailText(text) {
+  return escHtml(text || '')
+    .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color:var(--brand-mid)">$1</a>')
+    .replace(/\n/g, '<br>');
+}
+
+function emailFrameSrcDoc(html) {
+  return `<!doctype html><html><head><base target="_blank"><style>
+    html,body{margin:0;padding:0;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;}
+    body{padding:16px;overflow-wrap:anywhere;}
+    img{max-width:100%;height:auto;}
+    video{max-width:100%;height:auto;}
+    table{max-width:100%;border-collapse:collapse;}
+    a{color:#0b6f9f;}
+    pre{white-space:pre-wrap;overflow-wrap:anywhere;}
+  </style></head><body>${html || ''}</body></html>`;
+}
+
+function renderEmailBody(msg) {
+  if (msg.bodyHtml) {
+    return `<iframe class="email-html-frame"
+      sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+      onload="resizeEmailFrame(this)"
+      srcdoc="${escHtml(emailFrameSrcDoc(msg.bodyHtml))}"></iframe>`;
+  }
+
+  return `<div class="email-plain-body">${linkifyPlainEmailText(msg.body || '(no content)')}</div>`;
+}
+
+function resizeEmailFrame(frame) {
+  try {
+    const doc = frame.contentDocument || frame.contentWindow?.document;
+    const h = Math.max(260, Math.min(1200, (doc?.documentElement?.scrollHeight || doc?.body?.scrollHeight || 500) + 20));
+    frame.style.height = `${h}px`;
+  } catch {
+    frame.style.height = '620px';
+  }
+}
+
+function fileSizeLabel(size) {
+  const n = Number(size || 0);
+  if (!n) return '';
+  if (n < 1024) return `${n}B`;
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)}KB`;
+  return `${(n / 1024 / 1024).toFixed(1)}MB`;
+}
+
+function attachmentKind(att) {
+  const mime = String(att.mimeType || '').toLowerCase();
+  const name = String(att.name || '').toLowerCase();
+  if (mime.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(name)) return 'image';
+  if (mime.startsWith('video/') || /\.(mp4|webm|mov|m4v|avi)$/i.test(name)) return 'video';
+  if (mime === 'application/pdf' || /\.pdf$/i.test(name)) return 'pdf';
+  if (/\.(docx?|xlsx?|pptx?|csv|txt|zip|rar)$/i.test(name)) return 'document';
+  return 'file';
+}
+
+function attachmentIcon(kind) {
+  return {
+    image: 'ti-photo',
+    video: 'ti-video',
+    pdf: 'ti-file-type-pdf',
+    document: 'ti-file-text',
+    file: 'ti-paperclip'
+  }[kind] || 'ti-paperclip';
+}
+
+function renderEmailAttachments(provider, messageId, attachments = []) {
+  if (!attachments.length) return '';
+
+  const items = attachments.map((a, i) => {
+    const kind = attachmentKind(a);
+    const previewId = `att-preview-${String(messageId).replace(/[^a-z0-9]/gi, '')}-${i}`;
+    const canPreview = ['image', 'video', 'pdf'].includes(kind);
+    const size = fileSizeLabel(a.size);
+    const args = [
+      jsArg(provider),
+      jsArg(messageId),
+      jsArg(a.id),
+      jsArg(a.name || 'attachment'),
+      jsArg(a.folderId || ''),
+      jsArg(a.mimeType || ''),
+      jsArg(previewId)
+    ].join(',');
+
+    return `<div class="email-attachment-card">
+      <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
+        <i class="ti ${attachmentIcon(kind)}" style="font-size:18px;color:var(--brand-mid);flex-shrink:0"></i>
+        <div style="min-width:0">
+          <div style="font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(a.name || 'attachment')}</div>
+          <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace">${escHtml(a.mimeType || kind)}${size ? ' · ' + size : ''}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:5px;flex-shrink:0">
+        ${canPreview ? `<button class="btn bsm bo" onclick="previewEmailAttachment(${args})"><i class="ti ti-eye" style="font-size:11px"></i> Preview</button>` : ''}
+        <button class="btn bsm bo" onclick="downloadEmailAttachment(${args})"><i class="ti ti-download" style="font-size:11px"></i> Download</button>
+      </div>
+      <div id="${previewId}" class="email-attachment-preview"></div>
+    </div>`;
+  }).join('');
+
+  return `<div class="email-attachments">
+    <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:8px">ATTACHMENTS (${attachments.length})</div>
+    ${items}
+  </div>`;
+}
+
 async function render_inboxes() {
   if (!isManager()) return;
   const el = document.getElementById('page-inboxes');
@@ -264,24 +379,7 @@ async function readEmailMessage(provider, messageId, idx) {
       return;
     }
 
-    let attHtml = '';
-    if (msg.attachments?.length > 0) {
-      const attItems = msg.attachments.map(a => {
-        const sizeStr = a.size > 0 ? ` (${Math.round(a.size / 1024)}KB)` : '';
-        return `<span style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;font-size:11px;cursor:pointer;margin:3px" onclick="downloadEmailAttachment('${provider}','${messageId}','${a.id}','${escHtml(a.name).replace(/'/g, "\\'")}','${a.folderId || ''}')">
-          <i class="ti ti-paperclip" style="font-size:12px;color:var(--brand-mid)"></i>
-          ${escHtml(a.name)}${sizeStr}
-          <i class="ti ti-download" style="font-size:11px;color:var(--text3)"></i>
-        </span>`;
-      }).join('');
-      attHtml = `<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
-        <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:6px">ATTACHMENTS (${msg.attachments.length})</div>
-        <div style="display:flex;flex-wrap:wrap;gap:4px">${attItems}</div>
-      </div>`;
-    }
-
-    const fromEsc = escHtml(msg.from || '').replace(/'/g, "\\'");
-    const subjectEsc = escHtml(msg.subject || '').replace(/'/g, "\\'");
+    const attHtml = renderEmailAttachments(provider, messageId, msg.attachments || []);
 
     readEl.innerHTML = `<div class="card" style="max-width:760px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
@@ -292,11 +390,11 @@ async function readEmailMessage(provider, messageId, idx) {
           <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-top:2px">${msg.date ? formatDateTime(msg.date) : ''}</div>
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0">
-          <button class="btn bsm bo" onclick="replyToEmail('${provider}','${fromEsc}','${subjectEsc}')"><i class="ti ti-corner-up-left" style="font-size:11px;margin-right:3px"></i> Reply</button>
+          <button class="btn bsm bo" onclick="replyToEmail(${jsArg(provider)},${jsArg(msg.from || '')},${jsArg(msg.subject || '')})"><i class="ti ti-corner-up-left" style="font-size:11px;margin-right:3px"></i> Reply</button>
           <button class="btn bsm bo" onclick="closeReadPane()"><i class="ti ti-x" style="font-size:11px"></i></button>
         </div>
       </div>
-      <div style="font-size:12px;line-height:1.6;color:var(--text);white-space:pre-wrap;max-height:400px;overflow-y:auto;padding:10px;background:var(--bg);border-radius:var(--radius-sm);border:1px solid var(--border)">${escHtml(msg.body || '(no content)')}</div>
+      ${renderEmailBody(msg)}
       ${attHtml}
     </div>`;
   } catch {
@@ -429,28 +527,70 @@ async function sendEmailFromCompose(provider) {
   btn.innerHTML = '<i class="ti ti-send" style="font-size:12px;margin-right:4px"></i> Send';
 }
 
-async function downloadEmailAttachment(provider, messageId, attachmentId, filename, folderId) {
+async function loadEmailAttachment(provider, messageId, attachmentId, filename, folderId, mimeType) {
+  let url = `/email/attachment/${encodeURIComponent(provider)}/${encodeURIComponent(messageId)}/${encodeURIComponent(attachmentId)}`;
+  if (folderId) url += `?folderId=${encodeURIComponent(folderId)}`;
+  const data = await apiGet(url);
+  if (data.error) throw new Error(data.error);
+
+  const b64 = data.data || '';
+  const binary = atob(b64.replace(/-/g, '+').replace(/_/g, '/'));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+  const contentType = data.contentType || mimeType || 'application/octet-stream';
+  const blob = new Blob([bytes], { type: contentType });
+  return {
+    blob,
+    url: URL.createObjectURL(blob),
+    name: data.name || filename || 'attachment',
+    contentType
+  };
+}
+
+async function previewEmailAttachment(provider, messageId, attachmentId, filename, folderId, mimeType, previewId) {
+  const box = document.getElementById(previewId);
+  if (!box) return;
+  box.innerHTML = '<div class="spin" style="width:14px;height:14px;border-width:2px;margin:8px"></div>';
+
+  try {
+    const file = await loadEmailAttachment(provider, messageId, attachmentId, filename, folderId, mimeType);
+    const kind = attachmentKind({ name: file.name, mimeType: file.contentType });
+    const safeName = escHtml(file.name);
+
+    if (kind === 'image') {
+      box.innerHTML = `<div class="email-preview-toolbar">${safeName}</div><img src="${file.url}" alt="${safeName}" class="email-preview-image">`;
+      return;
+    }
+
+    if (kind === 'video') {
+      box.innerHTML = `<div class="email-preview-toolbar">${safeName}</div><video src="${file.url}" controls class="email-preview-video"></video>`;
+      return;
+    }
+
+    if (kind === 'pdf') {
+      box.innerHTML = `<div class="email-preview-toolbar">${safeName}</div><iframe src="${file.url}" class="email-preview-pdf"></iframe>`;
+      return;
+    }
+
+    box.innerHTML = `<div style="font-size:11px;color:var(--text2);padding:8px">Preview is not available for this file type. Please download it.</div>`;
+  } catch (err) {
+    box.innerHTML = `<div style="font-size:11px;color:#f85149;padding:8px">Preview failed: ${escHtml(err.message || 'unknown error')}</div>`;
+  }
+}
+
+async function downloadEmailAttachment(provider, messageId, attachmentId, filename, folderId, mimeType) {
   ntf('Downloading ' + filename + '...');
   try {
-    let url = `/email/attachment/${provider}/${messageId}/${attachmentId}`;
-    if (folderId) url += `?folderId=${folderId}`;
-    const data = await apiGet(url);
-    if (data.error) { ntf('Download failed: ' + data.error); return; }
-
-    const b64 = data.data;
-    const binary = atob(b64.replace(/-/g, '+').replace(/_/g, '/'));
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-
-    const blob = new Blob([bytes], { type: data.contentType || 'application/octet-stream' });
+    const file = await loadEmailAttachment(provider, messageId, attachmentId, filename, folderId, mimeType);
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = data.name || filename;
+    a.href = file.url;
+    a.download = file.name;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(a.href);
-    ntf('Downloaded ' + filename);
+    setTimeout(() => URL.revokeObjectURL(file.url), 1000);
+    ntf('Downloaded ' + file.name);
   } catch {
     ntf('Download failed');
   }

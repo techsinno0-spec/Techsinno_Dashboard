@@ -2,6 +2,109 @@ const { app } = require('@azure/functions');
 const { authenticate, jsonResponse, unauthorized, forbidden, badRequest } = require('../../shared/auth');
 const { getEmailConfig, gmailGet, msGet, zohoGet } = require('../../shared/email');
 
+function decodeQuotedPrintable(input) {
+  const text = String(input || '');
+  if (!/(=[0-9A-F]{2}|=\r?\n)/i.test(text)) return text;
+
+  const clean = text.replace(/=\r?\n/g, '');
+  const bytes = [];
+  for (let i = 0; i < clean.length; i++) {
+    if (clean[i] === '=' && /^[0-9A-F]{2}$/i.test(clean.slice(i + 1, i + 3))) {
+      bytes.push(parseInt(clean.slice(i + 1, i + 3), 16));
+      i += 2;
+    } else {
+      const code = clean.charCodeAt(i);
+      if (code <= 0xff) bytes.push(code);
+      else bytes.push(...Buffer.from(clean[i], 'utf8'));
+    }
+  }
+  return Buffer.from(bytes).toString('utf8');
+}
+
+function decodeHtmlEntities(input) {
+  const named = {
+    nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'",
+    rsquo: "'", lsquo: "'", rdquo: '"', ldquo: '"', ndash: '-', mdash: '-',
+    hellip: '...', bull: '•'
+  };
+  return String(input || '').replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, code) => {
+    const c = code.toLowerCase();
+    if (c[0] === '#') {
+      const n = c[1] === 'x' ? parseInt(c.slice(2), 16) : parseInt(c.slice(1), 10);
+      return Number.isFinite(n) ? String.fromCodePoint(n) : m;
+    }
+    return Object.prototype.hasOwnProperty.call(named, c) ? named[c] : m;
+  });
+}
+
+function normalizeEmailText(input) {
+  return decodeHtmlEntities(decodeQuotedPrintable(input))
+    .replace(/\r\n/g, '\n')
+    .replace(/\u00a0/g, ' ')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function htmlToText(html) {
+  return normalizeEmailText(String(html || '')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<hr[^>]*>/gi, '\n---\n')
+    .replace(/<li[^>]*>/gi, '\n• ')
+    .replace(/<\/(p|div|tr|table|li|h[1-6]|blockquote)>/gi, '\n')
+    .replace(/<[^>]+>/g, ' '));
+}
+
+function sanitizeEmailHtml(html) {
+  let safe = decodeQuotedPrintable(html);
+  if (!safe.trim()) return '';
+
+  safe = safe
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<iframe[^>]*>[\s\S]*?<\/iframe>/gi, '')
+    .replace(/<object[^>]*>[\s\S]*?<\/object>/gi, '')
+    .replace(/<embed[^>]*>[\s\S]*?<\/embed>/gi, '')
+    .replace(/<form[^>]*>[\s\S]*?<\/form>/gi, '')
+    .replace(/<(meta|base|link|input|button|textarea|select)[^>]*>/gi, '')
+    .replace(/\s+on[a-z]+\s*=\s*"[^"]*"/gi, '')
+    .replace(/\s+on[a-z]+\s*=\s*'[^']*'/gi, '')
+    .replace(/\s+on[a-z]+\s*=\s*[^\s>]+/gi, '')
+    .replace(/\s+(href|src)\s*=\s*"javascript:[^"]*"/gi, ' $1="#"')
+    .replace(/\s+(href|src)\s*=\s*'javascript:[^']*'/gi, " $1='#'")
+    .replace(/\s+(href|src)\s*=\s*javascript:[^\s>]*/gi, ' $1="#"');
+
+  return safe.trim();
+}
+
+function buildEmailBody({ html = '', text = '' }) {
+  const bodyHtml = html ? sanitizeEmailHtml(html) : '';
+  const bodyText = text ? normalizeEmailText(text) : htmlToText(html);
+  return {
+    body: bodyText || '(no content)',
+    bodyHtml
+  };
+}
+
+function decodeGmailPart(part) {
+  return part?.body?.data ? Buffer.from(part.body.data, 'base64url').toString('utf8') : '';
+}
+
+function extractGmailBodies(payload) {
+  const bodies = { html: '', text: '' };
+  function walk(part) {
+    if (!part) return;
+    const mime = (part.mimeType || '').toLowerCase();
+    if (mime === 'text/html' && !bodies.html) bodies.html = decodeGmailPart(part);
+    if (mime === 'text/plain' && !bodies.text) bodies.text = decodeGmailPart(part);
+    (part.parts || []).forEach(walk);
+  }
+  walk(payload);
+  if (!bodies.html && !bodies.text && payload?.body?.data) bodies.text = decodeGmailPart(payload);
+  return bodies;
+}
+
 app.http('email-message', {
   methods: ['GET'],
   authLevel: 'anonymous',
@@ -22,26 +125,11 @@ app.http('email-message', {
         const headers = {};
         (data.payload.headers || []).forEach(h => { headers[h.name] = h.value; });
 
-        function decodeBody(payload) {
-          if (payload.body?.data) return Buffer.from(payload.body.data, 'base64url').toString('utf-8');
-          if (payload.parts) {
-            const plain = payload.parts.find(p => p.mimeType === 'text/plain');
-            const html = payload.parts.find(p => p.mimeType === 'text/html');
-            const part = plain || html;
-            if (part?.body?.data) return Buffer.from(part.body.data, 'base64url').toString('utf-8');
-            for (const p of payload.parts) { const b = decodeBody(p); if (b) return b; }
-          }
-          return '';
-        }
-
         function collectAttachments(payload, list) {
           if (payload.filename?.length > 0 && payload.body?.attachmentId) {
             list.push({ id: payload.body.attachmentId, name: payload.filename, mimeType: payload.mimeType, size: payload.body.size || 0 });
           }
           if (payload.parts) payload.parts.forEach(p => collectAttachments(p, list));
-          if (payload.filename?.length > 0 && payload.body?.size > 0 && !payload.body?.attachmentId && payload.body?.data) {
-            list.push({ id: '__inline_' + list.length, name: payload.filename, mimeType: payload.mimeType, size: payload.body.size || 0, inline: true });
-          }
           return list;
         }
 
@@ -51,7 +139,7 @@ app.http('email-message', {
           from: headers['From'] || '',
           to: headers['To'] || '',
           date: headers['Date'] || '',
-          body: decodeBody(data.payload),
+          ...buildEmailBody(extractGmailBodies(data.payload)),
           attachments: collectAttachments(data.payload, [])
         });
       }
@@ -64,9 +152,7 @@ app.http('email-message', {
           '$select': 'subject,from,toRecipients,receivedDateTime,body,hasAttachments'
         });
         const raw = data.body?.content || '';
-        const body = data.body?.contentType === 'html'
-          ? raw.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
-          : raw;
+        const isHtml = (data.body?.contentType || '').toLowerCase() === 'html';
 
         let attachments = [];
         if (data.hasAttachments) {
@@ -84,7 +170,8 @@ app.http('email-message', {
           from: data.from?.emailAddress?.name || data.from?.emailAddress?.address || '',
           to: (data.toRecipients || []).map(r => r.emailAddress?.address).join(', '),
           date: data.receivedDateTime,
-          body, attachments
+          ...buildEmailBody({ html: isHtml ? raw : '', text: isHtml ? '' : raw }),
+          attachments
         });
       }
 
@@ -116,7 +203,8 @@ app.http('email-message', {
         }
 
         const msg = data.data || {};
-        const body = (msg.content || '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+        const rawContent = msg.content || msg.body || '';
+        const looksHtml = /<\/?[a-z][\s\S]*>/i.test(rawContent);
 
         let attachments = [];
         if (msg.attachments?.length > 0) {
@@ -157,7 +245,8 @@ app.http('email-message', {
           from: msg.fromAddress || msg.from || '',
           to: msg.toAddress || '',
           date: msg.receivedTime ? new Date(parseInt(msg.receivedTime)).toISOString() : '',
-          body, attachments
+          ...buildEmailBody({ html: looksHtml ? rawContent : '', text: looksHtml ? '' : rawContent }),
+          attachments
         });
       }
 
