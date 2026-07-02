@@ -7,6 +7,9 @@ const ZOHO_ALIAS_RECIPIENTS = [
   'info@techsinno.com',
   'sales@techsinno.com'
 ];
+const ZOHO_PAGE_SIZE = 50;
+const ZOHO_ALL_SCAN_LIMIT = 100;
+const ZOHO_ALIAS_SCAN_LIMIT = 300;
 
 function zohoRecipientText(message) {
   return [
@@ -15,6 +18,37 @@ function zohoRecipientText(message) {
     message.bccAddress,
     message.recipientAddress
   ].filter(Boolean).join(' ').toLowerCase();
+}
+
+async function fetchZohoMessages(cfg, accountId, folderId, maxToScan) {
+  const messages = [];
+  const seen = new Set();
+  let start = 1;
+
+  for (let page = 0; page < Math.ceil(maxToScan / ZOHO_PAGE_SIZE); page++) {
+    const params = { limit: ZOHO_PAGE_SIZE };
+    if (folderId) params.folderId = folderId;
+    if (page > 0) params.start = start;
+
+    const data = await zohoGet(cfg, `/accounts/${accountId}/messages/view`, params);
+    const pageMessages = Array.isArray(data.data) ? data.data : [];
+    if (!pageMessages.length) break;
+
+    const before = seen.size;
+    pageMessages.forEach(message => {
+      const id = message.messageId || message.mailId || message.id;
+      if (!id || seen.has(id)) return;
+      seen.add(id);
+      messages.push(message);
+    });
+
+    if (pageMessages.length < ZOHO_PAGE_SIZE) break;
+    if (seen.size === before) break;
+
+    start += ZOHO_PAGE_SIZE;
+  }
+
+  return messages.slice(0, maxToScan);
 }
 
 app.http('email-inbox', {
@@ -113,10 +147,8 @@ app.http('email-inbox', {
 
         if (folder === 'sent' && !folderId) return jsonResponse({ success: true, messages: [] });
 
-        const params = { limit: recipientFilter ? 60 : 20 };
-        if (folderId) params.folderId = folderId;
-        const data = await zohoGet(cfg, `/accounts/${cfg.accountId}/messages/view`, params);
-        const allMsgs = data.data || [];
+        const scanLimit = recipientFilter ? ZOHO_ALIAS_SCAN_LIMIT : ZOHO_ALL_SCAN_LIMIT;
+        const allMsgs = await fetchZohoMessages(cfg, cfg.accountId, folderId, scanLimit);
         const msgs = recipientFilter
           ? allMsgs.filter(m => zohoRecipientText(m).includes(recipientFilter))
           : allMsgs;
@@ -125,8 +157,9 @@ app.http('email-inbox', {
           success: true,
           email: cfg.email,
           recipient: recipientFilter,
+          scannedCount: allMsgs.length,
           unreadCount: folder === 'inbox' ? msgs.filter(m => !m.isRead).length : 0,
-          messages: msgs.slice(0, 30).map(m => ({
+          messages: msgs.slice(0, recipientFilter ? 80 : 60).map(m => ({
             id: m.messageId, subject: m.subject || '(no subject)',
             from: m.fromAddress || '', to: m.toAddress || '',
             date: m.receivedTime ? new Date(parseInt(m.receivedTime)).toISOString() : '',

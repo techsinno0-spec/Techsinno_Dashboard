@@ -201,10 +201,15 @@ async function loadInbox(provider, folder, recipientKey) {
 
     _currentMessages = data.messages || [];
     const unread = data.unreadCount || 0;
+    const scanNote = provider === 'zoho_mail' && data.scannedCount
+      ? `<div style="font-size:10px;color:var(--text3);padding:6px 12px;border-bottom:1px solid var(--border);font-family:'DM Mono',monospace">
+          Showing ${_currentMessages.length} message${_currentMessages.length === 1 ? '' : 's'} from latest ${data.scannedCount} Zoho message${data.scannedCount === 1 ? '' : 's'} scanned${recipientAddress ? ` for ${escHtml(recipientAddress)}` : ''}.
+        </div>`
+      : '';
 
     if (_currentMessages.length === 0) {
       const emptyText = recipientAddress ? `No messages sent to ${recipientAddress}` : 'No messages';
-      document.getElementById('emailMessageList').innerHTML = `<div class="empty-state" style="padding:30px"><i class="ti ti-inbox-off" style="font-size:24px"></i><div style="font-size:12px;color:var(--text3);margin-top:6px">${escHtml(emptyText)}</div></div>`;
+      document.getElementById('emailMessageList').innerHTML = `${scanNote}<div class="empty-state" style="padding:30px"><i class="ti ti-inbox-off" style="font-size:24px"></i><div style="font-size:12px;color:var(--text3);margin-top:6px">${escHtml(emptyText)}</div></div>`;
       return;
     }
 
@@ -235,6 +240,7 @@ async function loadInbox(provider, folder, recipientKey) {
     });
 
     document.getElementById('emailMessageList').innerHTML = `
+      ${scanNote}
       ${folder === 'inbox' && unread > 0 ? `<div style="font-size:11px;color:var(--brand-mid);padding:6px 12px;border-bottom:1px solid var(--border);font-family:'DM Mono',monospace">${unread} unread</div>` : ''}
       <div class="card" style="padding:0;overflow:hidden">${rows}</div>`;
   } catch (err) {
