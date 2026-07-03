@@ -57,23 +57,28 @@ function emailFrameSrcDoc(html) {
 }
 
 function renderEmailBody(msg) {
-  if (msg.bodyHtml) {
-    return `<iframe class="email-html-frame"
+  const readable = msg.body && msg.body !== '(no content)'
+    ? linkifyPlainEmailText(msg.body)
+    : '<span style="color:var(--text3)">(no readable text found)</span>';
+
+  const original = msg.bodyHtml ? `<details class="email-original-layout">
+    <summary><i class="ti ti-layout" style="font-size:12px"></i> Show original email layout</summary>
+    <iframe class="email-html-frame"
       sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
       onload="resizeEmailFrame(this)"
-      srcdoc="${escHtml(emailFrameSrcDoc(msg.bodyHtml))}"></iframe>`;
-  }
+      srcdoc="${escHtml(emailFrameSrcDoc(msg.bodyHtml))}"></iframe>
+  </details>` : '';
 
-  return `<div class="email-plain-body">${linkifyPlainEmailText(msg.body || '(no content)')}</div>`;
+  return `<div class="email-plain-body">${readable}</div>${original}`;
 }
 
 function resizeEmailFrame(frame) {
   try {
     const doc = frame.contentDocument || frame.contentWindow?.document;
-    const h = Math.max(260, Math.min(1200, (doc?.documentElement?.scrollHeight || doc?.body?.scrollHeight || 500) + 20));
+    const h = Math.max(320, (doc?.documentElement?.scrollHeight || doc?.body?.scrollHeight || 700) + 30);
     frame.style.height = `${h}px`;
   } catch {
-    frame.style.height = '620px';
+    frame.style.height = '760px';
   }
 }
 
@@ -106,9 +111,10 @@ function attachmentIcon(kind) {
 }
 
 function renderEmailAttachments(provider, messageId, attachments = []) {
-  if (!attachments.length) return '';
+  const files = (attachments || []).filter(a => a?.id);
+  if (!files.length) return '';
 
-  const items = attachments.map((a, i) => {
+  const items = files.map((a, i) => {
     const kind = attachmentKind(a);
     const previewId = `att-preview-${String(messageId).replace(/[^a-z0-9]/gi, '')}-${i}`;
     const canPreview = ['image', 'video', 'pdf'].includes(kind);
@@ -140,7 +146,7 @@ function renderEmailAttachments(provider, messageId, attachments = []) {
   }).join('');
 
   return `<div class="email-attachments">
-    <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:8px">ATTACHMENTS (${attachments.length})</div>
+    <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:8px">ATTACHMENTS (${files.length})</div>
     ${items}
   </div>`;
 }
@@ -373,7 +379,10 @@ async function readEmailMessage(provider, messageId, idx) {
   listEl.style.display = 'none';
 
   try {
-    const msg = await apiGet(`/email/message/${provider}/${messageId}`);
+    let messageUrl = `/email/message/${provider}/${messageId}`;
+    const source = _currentMessages[idx] || {};
+    if (provider === 'zoho_mail' && source.folderId) messageUrl += `?folderId=${encodeURIComponent(source.folderId)}`;
+    const msg = await apiGet(messageUrl);
     if (msg.error) {
       readEl.innerHTML = `<div style="color:#f85149;font-size:12px;padding:20px">${escHtml(msg.error)}</div>`;
       return;

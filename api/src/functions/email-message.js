@@ -46,6 +46,12 @@ function normalizeEmailText(input) {
     .trim();
 }
 
+function hasRealHtml(input) {
+  const html = String(input || '');
+  if (!html.trim()) return false;
+  return /<!doctype|<html[\s>]|<body[\s>]|<head[\s>]|<table[\s>]|<div[\s>]|<p[\s>]|<br\s*\/?>|<span[\s>]|<a[\s>]|<img[\s>]|<strong[\s>]|<b[\s>]|<ul[\s>]|<ol[\s>]|<li[\s>]/i.test(html);
+}
+
 function htmlToText(html) {
   return normalizeEmailText(String(html || '')
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
@@ -79,8 +85,10 @@ function sanitizeEmailHtml(html) {
 }
 
 function buildEmailBody({ html = '', text = '' }) {
-  const bodyHtml = html ? sanitizeEmailHtml(html) : '';
-  const bodyText = text ? normalizeEmailText(text) : htmlToText(html);
+  const bodyHtml = hasRealHtml(html) ? sanitizeEmailHtml(html) : '';
+  const textBody = text ? normalizeEmailText(text) : '';
+  const htmlBody = html ? htmlToText(html) : '';
+  const bodyText = htmlBody.length > textBody.length * 1.4 ? htmlBody : (textBody || htmlBody);
   return {
     body: bodyText || '(no content)',
     bodyHtml
@@ -92,17 +100,53 @@ function decodeGmailPart(part) {
 }
 
 function extractGmailBodies(payload) {
-  const bodies = { html: '', text: '' };
+  const found = { html: [], text: [] };
   function walk(part) {
     if (!part) return;
     const mime = (part.mimeType || '').toLowerCase();
-    if (mime === 'text/html' && !bodies.html) bodies.html = decodeGmailPart(part);
-    if (mime === 'text/plain' && !bodies.text) bodies.text = decodeGmailPart(part);
+    if (mime === 'text/html') {
+      const body = decodeGmailPart(part);
+      if (body.trim()) found.html.push(body);
+    }
+    if (mime === 'text/plain') {
+      const body = decodeGmailPart(part);
+      if (body.trim()) found.text.push(body);
+    }
     (part.parts || []).forEach(walk);
   }
   walk(payload);
-  if (!bodies.html && !bodies.text && payload?.body?.data) bodies.text = decodeGmailPart(payload);
-  return bodies;
+  if (!found.html.length && !found.text.length && payload?.body?.data) found.text.push(decodeGmailPart(payload));
+
+  const longest = list => list.sort((a, b) => b.length - a.length)[0] || '';
+  return { html: longest(found.html), text: longest(found.text) };
+}
+
+function gmailFilenameFromHeaders(headers = []) {
+  const text = headers.map(h => `${h.name || ''}: ${h.value || ''}`).join('\n');
+  const utf = text.match(/filename\*=UTF-8''([^;\n]+)/i);
+  if (utf) return decodeURIComponent(utf[1].replace(/"/g, ''));
+  const plain = text.match(/filename="?([^";\n]+)"?/i);
+  return plain ? plain[1] : '';
+}
+
+function flattenZohoAttachments(raw, folderId) {
+  const candidates = [
+    raw?.attachments,
+    raw?.attachment,
+    raw?.data?.attachments,
+    raw?.data?.attachment,
+    raw?.data
+  ];
+  const list = candidates.find(Array.isArray) || [];
+  return list
+    .map(a => ({
+      id: a.attachmentId || a.attachId || a.storeName || a.id,
+      name: a.attachmentName || a.fileName || a.name || a.file_name || 'attachment',
+      mimeType: a.contentType || a.mimeType || a.type || 'application/octet-stream',
+      size: a.attachmentSize || a.fileSize || a.size || 0,
+      folderId
+    }))
+    .filter(a => a.id);
 }
 
 app.http('email-message', {
@@ -126,10 +170,11 @@ app.http('email-message', {
         (data.payload.headers || []).forEach(h => { headers[h.name] = h.value; });
 
         function collectAttachments(payload, list) {
-          if (payload.filename?.length > 0 && payload.body?.attachmentId) {
-            list.push({ id: payload.body.attachmentId, name: payload.filename, mimeType: payload.mimeType, size: payload.body.size || 0 });
+          if (payload?.body?.attachmentId) {
+            const name = payload.filename || gmailFilenameFromHeaders(payload.headers) || 'attachment';
+            list.push({ id: payload.body.attachmentId, name, mimeType: payload.mimeType, size: payload.body.size || 0 });
           }
-          if (payload.parts) payload.parts.forEach(p => collectAttachments(p, list));
+          if (payload?.parts) payload.parts.forEach(p => collectAttachments(p, list));
           return list;
         }
 
@@ -178,10 +223,14 @@ app.http('email-message', {
       if (provider === 'zoho_mail') {
         const cfg = await getEmailConfig('zoho_mail');
         if (!cfg?.accessToken || !cfg?.accountId) return badRequest('Zoho Mail not connected');
+        const url = new URL(request.url);
+        let folderId = url.searchParams.get('folderId') || '';
 
-        let data, folderId;
+        let data;
         try {
-          data = await zohoGet(cfg, `/accounts/${cfg.accountId}/messages/${messageId}/content`);
+          data = folderId
+            ? await zohoGet(cfg, `/accounts/${cfg.accountId}/folders/${folderId}/messages/${messageId}/content`)
+            : await zohoGet(cfg, `/accounts/${cfg.accountId}/messages/${messageId}/content`);
         } catch (e1) {
           let found = false;
           try {
@@ -204,18 +253,10 @@ app.http('email-message', {
 
         const msg = data.data || {};
         const rawContent = msg.content || msg.body || '';
-        const looksHtml = /<\/?[a-z][\s\S]*>/i.test(rawContent);
+        const looksHtml = hasRealHtml(rawContent);
 
-        let attachments = [];
-        if (msg.attachments?.length > 0) {
-          attachments = msg.attachments.map(a => ({
-            id: a.attachmentId || a.attachId || a.storeName,
-            name: a.attachmentName || a.fileName || a.name,
-            mimeType: a.contentType || 'application/octet-stream',
-            size: a.attachmentSize || a.fileSize || a.size || 0,
-            folderId
-          }));
-        } else {
+        let attachments = flattenZohoAttachments(msg, folderId);
+        if (!attachments.length) {
           try {
             if (!folderId) {
               const folders = await zohoGet(cfg, `/accounts/${cfg.accountId}/folders`);
@@ -224,16 +265,17 @@ app.http('email-message', {
             }
             if (folderId) {
               const msgMeta = await zohoGet(cfg, `/accounts/${cfg.accountId}/folders/${folderId}/messages/${messageId}`);
-              if (msgMeta?.data?.hasAttachment) {
+              const metaAttachments = flattenZohoAttachments(msgMeta, folderId);
+              if (metaAttachments.length) {
+                attachments = metaAttachments;
+              } else if (msgMeta?.data?.hasAttachment || msgMeta?.data?.attachmentCount || msgMeta?.data?.attachments?.length) {
                 const attRes = await zohoGet(cfg, `/accounts/${cfg.accountId}/folders/${folderId}/messages/${messageId}/attachments`);
-                const attList = attRes?.data?.attachments || attRes?.data || [];
-                attachments = (Array.isArray(attList) ? attList : []).map(a => ({
-                  id: a.attachmentId || a.attachId || a.storeName,
-                  name: a.attachmentName || a.fileName || a.name,
-                  mimeType: a.contentType || 'application/octet-stream',
-                  size: a.attachmentSize || a.fileSize || a.size || 0,
-                  folderId
-                }));
+                attachments = flattenZohoAttachments(attRes, folderId);
+              } else {
+                try {
+                  const attRes = await zohoGet(cfg, `/accounts/${cfg.accountId}/folders/${folderId}/messages/${messageId}/attachments`);
+                  attachments = flattenZohoAttachments(attRes, folderId);
+                } catch {}
               }
             }
           } catch {}

@@ -39,7 +39,7 @@ async function fetchZohoMessages(cfg, accountId, folderId, maxToScan) {
       const id = message.messageId || message.mailId || message.id;
       if (!id || seen.has(id)) return;
       seen.add(id);
-      messages.push(message);
+      messages.push({ ...message, folderId: message.folderId || folderId });
     });
 
     if (pageMessages.length < ZOHO_PAGE_SIZE) break;
@@ -163,7 +163,9 @@ app.http('email-inbox', {
             id: m.messageId, subject: m.subject || '(no subject)',
             from: m.fromAddress || '', to: m.toAddress || '',
             date: m.receivedTime ? new Date(parseInt(m.receivedTime)).toISOString() : '',
-            unread: !m.isRead
+            unread: !m.isRead,
+            folderId: m.folderId || folderId || '',
+            hasAttachment: !!(m.hasAttachment || m.attachmentCount || m.attachments?.length)
           }))
         });
       }
