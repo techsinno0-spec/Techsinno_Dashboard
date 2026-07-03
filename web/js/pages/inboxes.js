@@ -45,28 +45,46 @@ function linkifyPlainEmailText(text) {
 }
 
 function emailFrameSrcDoc(html) {
-  return `<!doctype html><html><head><base target="_blank"><style>
-    html,body{margin:0;padding:0;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;}
-    body{padding:16px;overflow-wrap:anywhere;}
+  const css = `<base target="_blank"><style>
+    html{margin:0;padding:0;background:#fff;color:#111;}
+    body{margin:0;padding:14px;overflow-wrap:anywhere;font-family:Arial,Helvetica,sans-serif;}
     img{max-width:100%;height:auto;}
     video{max-width:100%;height:auto;}
     table{max-width:100%;border-collapse:collapse;}
     a{color:#0b6f9f;}
     pre{white-space:pre-wrap;overflow-wrap:anywhere;}
-  </style></head><body>${html || ''}</body></html>`;
+  </style>`;
+  const source = html || '';
+  if (/<html[\s>]/i.test(source)) {
+    if (/<head[\s>]/i.test(source)) return source.replace(/<head([^>]*)>/i, `<head$1>${css}`);
+    return source.replace(/<html([^>]*)>/i, `<html$1><head>${css}</head>`);
+  }
+  return `<!doctype html><html><head>${css}</head><body>${source}</body></html>`;
 }
 
-function renderEmailBody(msg) {
+function renderFormattedEmail(msg) {
+  return `<iframe class="email-html-frame"
+    sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+    onload="resizeEmailFrame(this)"
+    srcdoc="${escHtml(emailFrameSrcDoc(msg.bodyHtml))}"></iframe>`;
+}
+
+function renderEmailBody(msg, provider) {
   const readable = msg.body && msg.body !== '(no content)'
     ? linkifyPlainEmailText(msg.body)
     : '<span style="color:var(--text3)">(no readable text found)</span>';
 
+  if (msg.bodyHtml && ['gmail', 'outlook'].includes(provider)) {
+    return `${renderFormattedEmail(msg)}
+      <details class="email-original-layout">
+        <summary><i class="ti ti-align-left" style="font-size:12px"></i> Show readable text fallback</summary>
+        <div class="email-plain-body" style="margin-top:8px">${readable}</div>
+      </details>`;
+  }
+
   const original = msg.bodyHtml ? `<details class="email-original-layout">
     <summary><i class="ti ti-layout" style="font-size:12px"></i> Show original email layout</summary>
-    <iframe class="email-html-frame"
-      sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-      onload="resizeEmailFrame(this)"
-      srcdoc="${escHtml(emailFrameSrcDoc(msg.bodyHtml))}"></iframe>
+    ${renderFormattedEmail(msg)}
   </details>` : '';
 
   return `<div class="email-plain-body">${readable}</div>${original}`;
@@ -403,7 +421,7 @@ async function readEmailMessage(provider, messageId, idx) {
           <button class="btn bsm bo" onclick="closeReadPane()"><i class="ti ti-x" style="font-size:11px"></i></button>
         </div>
       </div>
-      ${renderEmailBody(msg)}
+      ${renderEmailBody(msg, provider)}
       ${attHtml}
     </div>`;
   } catch {

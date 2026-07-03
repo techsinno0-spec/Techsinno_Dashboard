@@ -144,9 +144,24 @@ function flattenZohoAttachments(raw, folderId) {
       name: a.attachmentName || a.fileName || a.name || a.file_name || 'attachment',
       mimeType: a.contentType || a.mimeType || a.type || 'application/octet-stream',
       size: a.attachmentSize || a.fileSize || a.size || 0,
-      folderId
+      folderId,
+      inline: !!a.cid
     }))
-    .filter(a => a.id);
+    .filter(a => a.id && !a.inline);
+}
+
+async function getZohoAttachmentInfo(cfg, folderId, messageId) {
+  if (!folderId) return [];
+  try {
+    const attRes = await zohoGet(
+      cfg,
+      `/accounts/${cfg.accountId}/folders/${folderId}/messages/${messageId}/attachmentinfo`,
+      { includeInline: true }
+    );
+    return flattenZohoAttachments(attRes, folderId);
+  } catch {
+    return [];
+  }
 }
 
 app.http('email-message', {
@@ -268,14 +283,8 @@ app.http('email-message', {
               const metaAttachments = flattenZohoAttachments(msgMeta, folderId);
               if (metaAttachments.length) {
                 attachments = metaAttachments;
-              } else if (msgMeta?.data?.hasAttachment || msgMeta?.data?.attachmentCount || msgMeta?.data?.attachments?.length) {
-                const attRes = await zohoGet(cfg, `/accounts/${cfg.accountId}/folders/${folderId}/messages/${messageId}/attachments`);
-                attachments = flattenZohoAttachments(attRes, folderId);
               } else {
-                try {
-                  const attRes = await zohoGet(cfg, `/accounts/${cfg.accountId}/folders/${folderId}/messages/${messageId}/attachments`);
-                  attachments = flattenZohoAttachments(attRes, folderId);
-                } catch {}
+                attachments = await getZohoAttachmentInfo(cfg, folderId, messageId);
               }
             }
           } catch {}
