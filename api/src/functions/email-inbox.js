@@ -145,12 +145,12 @@ app.http('email-inbox', {
         const cfg = await getEmailConfig('gmail');
         if (!cfg?.accessToken) return badRequest('Gmail not connected');
 
-        const labelId = folder === 'sent' ? 'SENT' : 'INBOX';
+        const q = folder === 'sent' ? 'in:sent' : 'in:inbox';
         const [profile, listRes, unreadRes] = await Promise.all([
           folder === 'inbox' ? gmailGet(cfg, '/profile') : Promise.resolve(null),
-          gmailGet(cfg, '/messages', { labelIds: labelId, maxResults: GMAIL_MESSAGE_LIMIT }),
+          gmailGet(cfg, '/messages', { q, maxResults: GMAIL_MESSAGE_LIMIT }),
           folder === 'inbox'
-            ? gmailGet(cfg, '/messages', { labelIds: 'INBOX', q: 'is:unread', maxResults: 1 })
+            ? gmailGet(cfg, '/messages', { q: 'is:unread', maxResults: 1 })
             : Promise.resolve(null)
         ]);
 
