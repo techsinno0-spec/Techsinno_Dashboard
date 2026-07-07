@@ -144,6 +144,7 @@ function renderEmailAttachments(provider, messageId, attachments = []) {
       jsArg(a.name || 'attachment'),
       jsArg(a.folderId || ''),
       jsArg(a.mimeType || ''),
+      jsArg(a.accountId || ''),
       jsArg(previewId)
     ].join(',');
 
@@ -399,7 +400,13 @@ async function readEmailMessage(provider, messageId, idx) {
   try {
     let messageUrl = `/email/message/${provider}/${messageId}`;
     const source = _currentMessages[idx] || {};
-    if (provider === 'zoho_mail' && source.folderId) messageUrl += `?folderId=${encodeURIComponent(source.folderId)}`;
+    if (provider === 'zoho_mail') {
+      const params = new URLSearchParams();
+      if (source.folderId) params.set('folderId', source.folderId);
+      if (source.accountId) params.set('accountId', source.accountId);
+      const qs = params.toString();
+      if (qs) messageUrl += `?${qs}`;
+    }
     const msg = await apiGet(messageUrl);
     if (msg.error) {
       readEl.innerHTML = `<div style="color:#f85149;font-size:12px;padding:20px">${escHtml(msg.error)}</div>`;
@@ -554,9 +561,13 @@ async function sendEmailFromCompose(provider) {
   btn.innerHTML = '<i class="ti ti-send" style="font-size:12px;margin-right:4px"></i> Send';
 }
 
-async function loadEmailAttachment(provider, messageId, attachmentId, filename, folderId, mimeType) {
+async function loadEmailAttachment(provider, messageId, attachmentId, filename, folderId, mimeType, accountId) {
   let url = `/email/attachment/${encodeURIComponent(provider)}/${encodeURIComponent(messageId)}/${encodeURIComponent(attachmentId)}`;
-  if (folderId) url += `?folderId=${encodeURIComponent(folderId)}`;
+  const params = new URLSearchParams();
+  if (folderId) params.set('folderId', folderId);
+  if (accountId) params.set('accountId', accountId);
+  const qs = params.toString();
+  if (qs) url += `?${qs}`;
   const data = await apiGet(url);
   if (data.error) throw new Error(data.error);
 
@@ -575,13 +586,13 @@ async function loadEmailAttachment(provider, messageId, attachmentId, filename, 
   };
 }
 
-async function previewEmailAttachment(provider, messageId, attachmentId, filename, folderId, mimeType, previewId) {
+async function previewEmailAttachment(provider, messageId, attachmentId, filename, folderId, mimeType, accountId, previewId) {
   const box = document.getElementById(previewId);
   if (!box) return;
   box.innerHTML = '<div class="spin" style="width:14px;height:14px;border-width:2px;margin:8px"></div>';
 
   try {
-    const file = await loadEmailAttachment(provider, messageId, attachmentId, filename, folderId, mimeType);
+    const file = await loadEmailAttachment(provider, messageId, attachmentId, filename, folderId, mimeType, accountId);
     const kind = attachmentKind({ name: file.name, mimeType: file.contentType });
     const safeName = escHtml(file.name);
 
@@ -606,10 +617,10 @@ async function previewEmailAttachment(provider, messageId, attachmentId, filenam
   }
 }
 
-async function downloadEmailAttachment(provider, messageId, attachmentId, filename, folderId, mimeType) {
+async function downloadEmailAttachment(provider, messageId, attachmentId, filename, folderId, mimeType, accountId) {
   ntf('Downloading ' + filename + '...');
   try {
-    const file = await loadEmailAttachment(provider, messageId, attachmentId, filename, folderId, mimeType);
+    const file = await loadEmailAttachment(provider, messageId, attachmentId, filename, folderId, mimeType, accountId);
     const a = document.createElement('a');
     a.href = file.url;
     a.download = file.name;

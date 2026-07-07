@@ -38,6 +38,7 @@ app.http('email-attachment', {
     const { provider, messageId, attachmentId } = request.params;
     const url = new URL(request.url);
     const folderId = url.searchParams.get('folderId');
+    const accountId = url.searchParams.get('accountId');
 
     try {
       if (provider === 'gmail') {
@@ -66,7 +67,7 @@ app.http('email-attachment', {
 
         const token = await ensureZohoToken(cfg);
         const region = getZohoRegion(cfg.region || 'com');
-        const baseUrl = `${region.mail}/api/accounts/${cfg.accountId}`;
+        const baseUrl = `${region.mail}/api/accounts/${accountId || cfg.accountId}`;
         const attUrl = folderId
           ? `${baseUrl}/folders/${folderId}/messages/${messageId}/attachments/${attachmentId}`
           : `${baseUrl}/messages/${messageId}/attachments/${attachmentId}`;

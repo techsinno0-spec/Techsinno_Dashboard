@@ -150,12 +150,12 @@ function flattenZohoAttachments(raw, folderId) {
     .filter(a => a.id && !a.inline);
 }
 
-async function getZohoAttachmentInfo(cfg, folderId, messageId) {
+async function getZohoAttachmentInfo(cfg, accountId, folderId, messageId) {
   if (!folderId) return [];
   try {
     const attRes = await zohoGet(
       cfg,
-      `/accounts/${cfg.accountId}/folders/${folderId}/messages/${messageId}/attachmentinfo`,
+      `/accounts/${accountId}/folders/${folderId}/messages/${messageId}/attachmentinfo`,
       { includeInline: true }
     );
     return flattenZohoAttachments(attRes, folderId);
@@ -240,23 +240,24 @@ app.http('email-message', {
         if (!cfg?.accessToken || !cfg?.accountId) return badRequest('Zoho Mail not connected');
         const url = new URL(request.url);
         let folderId = url.searchParams.get('folderId') || '';
+        const accountId = url.searchParams.get('accountId') || cfg.accountId;
 
         let data;
         try {
           data = folderId
-            ? await zohoGet(cfg, `/accounts/${cfg.accountId}/folders/${folderId}/messages/${messageId}/content`)
-            : await zohoGet(cfg, `/accounts/${cfg.accountId}/messages/${messageId}/content`);
+            ? await zohoGet(cfg, `/accounts/${accountId}/folders/${folderId}/messages/${messageId}/content`)
+            : await zohoGet(cfg, `/accounts/${accountId}/messages/${messageId}/content`);
         } catch (e1) {
           let found = false;
           try {
-            const folders = await zohoGet(cfg, `/accounts/${cfg.accountId}/folders`);
+            const folders = await zohoGet(cfg, `/accounts/${accountId}/folders`);
             const tryFolders = (folders.data || []).filter(f =>
               f.folderName === 'Inbox' || f.path === 'Inbox' ||
               ['Sent', 'Sent Items', 'Sent Mail'].includes(f.folderName) || f.folderType === 'sent'
             );
             for (const f of tryFolders) {
               try {
-                data = await zohoGet(cfg, `/accounts/${cfg.accountId}/folders/${f.folderId}/messages/${messageId}/content`);
+                data = await zohoGet(cfg, `/accounts/${accountId}/folders/${f.folderId}/messages/${messageId}/content`);
                 folderId = f.folderId;
                 found = true;
                 break;
@@ -274,21 +275,22 @@ app.http('email-message', {
         if (!attachments.length) {
           try {
             if (!folderId) {
-              const folders = await zohoGet(cfg, `/accounts/${cfg.accountId}/folders`);
+              const folders = await zohoGet(cfg, `/accounts/${accountId}/folders`);
               const inbox = (folders.data || []).find(f => f.folderName === 'Inbox' || f.path === 'Inbox');
               if (inbox) folderId = inbox.folderId;
             }
             if (folderId) {
-              const msgMeta = await zohoGet(cfg, `/accounts/${cfg.accountId}/folders/${folderId}/messages/${messageId}`);
+              const msgMeta = await zohoGet(cfg, `/accounts/${accountId}/folders/${folderId}/messages/${messageId}`);
               const metaAttachments = flattenZohoAttachments(msgMeta, folderId);
               if (metaAttachments.length) {
                 attachments = metaAttachments;
               } else {
-                attachments = await getZohoAttachmentInfo(cfg, folderId, messageId);
+                attachments = await getZohoAttachmentInfo(cfg, accountId, folderId, messageId);
               }
             }
           } catch {}
         }
+        attachments = attachments.map(a => ({ ...a, accountId }));
 
         return jsonResponse({
           success: true,

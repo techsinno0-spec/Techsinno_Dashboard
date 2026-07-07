@@ -63,17 +63,49 @@ function findMailFolder(folders, folder) {
   });
 }
 
+function zohoAccountRecipientText(account) {
+  const aliases = Array.isArray(account?.sendMailDetails) ? account.sendMailDetails : [];
+  return [
+    account?.primaryEmailAddress,
+    account?.emailAddress,
+    account?.accountDisplayName,
+    ...aliases.map(a => a.fromAddress)
+  ].filter(Boolean).join(' ').toLowerCase();
+}
+
+async function getZohoMailAccounts(cfg) {
+  try {
+    const data = await zohoGet(cfg, '/accounts');
+    const accounts = Array.isArray(data.data) ? data.data.filter(a => a?.accountId) : [];
+    if (accounts.length) return accounts;
+  } catch {}
+
+  return [{
+    accountId: cfg.accountId,
+    primaryEmailAddress: cfg.email,
+    sendMailDetails: Array.isArray(cfg.aliases)
+      ? cfg.aliases.map(a => ({ fromAddress: a.address, displayName: a.name }))
+      : []
+  }].filter(a => a.accountId);
+}
+
 async function fetchZohoMessages(cfg, accountId, folderId, maxToScan) {
   const messages = [];
   const seen = new Set();
   let start = 1;
 
   for (let page = 0; page < Math.ceil(maxToScan / ZOHO_PAGE_SIZE); page++) {
-    const params = { limit: ZOHO_PAGE_SIZE, sortcolumn: 'date', sortorder: 'desc' };
+    const params = { limit: ZOHO_PAGE_SIZE };
     if (folderId) params.folderId = folderId;
     if (page > 0) params.start = start;
 
-    const data = await zohoGet(cfg, `/accounts/${accountId}/messages/view`, params);
+    let data;
+    try {
+      data = await zohoGet(cfg, `/accounts/${accountId}/messages/view`, params);
+    } catch (err) {
+      if (messages.length) break;
+      throw err;
+    }
     const pageMessages = Array.isArray(data.data) ? data.data : [];
     if (!pageMessages.length) break;
 
@@ -184,17 +216,36 @@ app.http('email-inbox', {
         if (!cfg?.accessToken || !cfg?.accountId) return badRequest('Zoho Mail not connected');
         const recipientFilter = ZOHO_ALIAS_RECIPIENTS.includes(recipient) ? recipient : '';
 
-        let folderId;
-        try {
-          const folders = await zohoGet(cfg, `/accounts/${cfg.accountId}/folders`);
-          const target = findMailFolder(folders, folder);
-          if (target) folderId = target.folderId;
-        } catch {}
-
-        if (folder === 'sent' && !folderId) return mailJsonResponse({ success: true, messages: [] });
-
         const scanLimit = recipientFilter ? ZOHO_ALIAS_SCAN_LIMIT : ZOHO_ALL_SCAN_LIMIT;
-        const allMsgs = await fetchZohoMessages(cfg, cfg.accountId, folderId, scanLimit);
+        const accounts = await getZohoMailAccounts(cfg);
+        const targetAccounts = recipientFilter
+          ? accounts.filter(a => zohoAccountRecipientText(a).includes(recipientFilter))
+          : accounts;
+        const accountsToScan = targetAccounts.length ? targetAccounts : accounts;
+        const perAccountLimit = Math.max(ZOHO_PAGE_SIZE, Math.ceil(scanLimit / Math.max(1, accountsToScan.length)));
+        const allMsgs = [];
+        let accountError = null;
+
+        for (const account of accountsToScan) {
+          let folderId;
+          try {
+            const folders = await zohoGet(cfg, `/accounts/${account.accountId}/folders`);
+            const target = findMailFolder(folders, folder);
+            if (target) folderId = target.folderId;
+          } catch {}
+
+          if (folder === 'sent' && !folderId) continue;
+
+          try {
+            const accountMsgs = await fetchZohoMessages(cfg, account.accountId, folderId, perAccountLimit);
+            accountMsgs.forEach(m => allMsgs.push({ ...m, accountId: account.accountId, folderId: m.folderId || folderId || '' }));
+          } catch (err) {
+            accountError = accountError || err;
+          }
+        }
+
+        if (!allMsgs.length && accountError) throw accountError;
+        allMsgs.sort(newestFirst);
         const msgs = recipientFilter
           ? allMsgs.filter(m => {
               const recipientText = zohoRecipientText(m);
@@ -213,7 +264,8 @@ app.http('email-inbox', {
             from: m.fromAddress || '', to: m.toAddress || '',
             date: m.receivedTime ? new Date(parseInt(m.receivedTime)).toISOString() : '',
             unread: !m.isRead,
-            folderId: m.folderId || folderId || '',
+            folderId: m.folderId || '',
+            accountId: m.accountId || cfg.accountId || '',
             hasAttachment: !!(m.hasAttachment || m.attachmentCount || m.attachments?.length)
           }))
         });
