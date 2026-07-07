@@ -115,6 +115,7 @@ const AUTO_REFRESH_PAGES = new Set([
   'job-cards',
   'goals',
   'zoho',
+  'inboxes',
   'crm',
   'quotes',
   'social',

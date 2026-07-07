@@ -332,7 +332,7 @@ async function loadInbox(provider, folder, recipientKey) {
     <div id="emailReadPane" style="display:none"></div>`;
 
   try {
-    let path = `/email/inbox/${provider}?folder=${folder}`;
+    let path = `/email/inbox/${provider}?folder=${folder}&_=${Date.now()}`;
     const recipientAddress = provider === 'zoho_mail' && folder === 'inbox' ? zohoRecipientAddress(activeRecipient) : '';
     if (recipientAddress) path += `&recipient=${encodeURIComponent(recipientAddress)}`;
     const data = await apiGet(path);
