@@ -8,6 +8,7 @@ const ZOHO_ALIAS_RECIPIENTS = [
   'sales@techsinno.com'
 ];
 const GMAIL_MESSAGE_LIMIT = 50;
+const GMAIL_SCAN_LIMIT = 200;
 const OUTLOOK_MESSAGE_LIMIT = 50;
 const ZOHO_PAGE_SIZE = 50;
 const ZOHO_ALL_SCAN_LIMIT = 250;
@@ -22,6 +23,36 @@ function mailJsonResponse(body, status = 200) {
     Expires: '0'
   };
   return response;
+}
+
+function upstreamMailError(err) {
+  const data = err?.response?.data;
+  const nested = data?.error;
+  let message = '';
+
+  if (nested && typeof nested === 'object') {
+    message = nested.message || nested.status || nested.code || '';
+  } else if (typeof nested === 'string') {
+    message = nested;
+  }
+
+  message = message ||
+    data?.error_description ||
+    data?.message ||
+    (typeof data === 'string' ? data : '') ||
+    err?.message ||
+    'Failed to load mail';
+
+  return err?.response?.status ? `${message} (${err.response.status})` : message;
+}
+
+async function mapLimit(items, limit, mapper) {
+  const results = [];
+  for (let i = 0; i < items.length; i += limit) {
+    const chunk = items.slice(i, i + limit);
+    results.push(...await Promise.all(chunk.map(mapper)));
+  }
+  return results;
 }
 
 function zohoRecipientText(message) {
@@ -89,19 +120,20 @@ async function getZohoMailAccounts(cfg) {
   }].filter(a => a.accountId);
 }
 
-async function fetchZohoMessages(cfg, accountId, folderId, maxToScan) {
+async function fetchZohoMessageSource(cfg, path, baseParams, folderId, maxToScan) {
   const messages = [];
   const seen = new Set();
-  let start = 1;
 
   for (let page = 0; page < Math.ceil(maxToScan / ZOHO_PAGE_SIZE); page++) {
-    const params = { limit: ZOHO_PAGE_SIZE };
-    if (folderId) params.folderId = folderId;
-    if (page > 0) params.start = start;
+    const params = {
+      ...baseParams,
+      limit: ZOHO_PAGE_SIZE
+    };
+    if (page > 0) params.start = page * ZOHO_PAGE_SIZE + 1;
 
     let data;
     try {
-      data = await zohoGet(cfg, `/accounts/${accountId}/messages/view`, params);
+      data = await zohoGet(cfg, path, params);
     } catch (err) {
       if (messages.length) break;
       throw err;
@@ -119,10 +151,38 @@ async function fetchZohoMessages(cfg, accountId, folderId, maxToScan) {
 
     if (pageMessages.length < ZOHO_PAGE_SIZE) break;
     if (seen.size === before) break;
-
-    start += ZOHO_PAGE_SIZE;
   }
 
+  return messages;
+}
+
+async function fetchZohoMessages(cfg, accountId, folderId, maxToScan) {
+  const sources = folderId
+    ? [
+        { path: `/accounts/${accountId}/folders/${folderId}/messages/view`, params: {} },
+        { path: `/accounts/${accountId}/messages/view`, params: { folderId } }
+      ]
+    : [{ path: `/accounts/${accountId}/messages/view`, params: {} }];
+
+  const messages = [];
+  const seen = new Set();
+  let sourceError = null;
+
+  for (const source of sources) {
+    try {
+      const sourceMessages = await fetchZohoMessageSource(cfg, source.path, source.params, folderId, maxToScan);
+      sourceMessages.forEach(message => {
+        const id = message.messageId || message.mailId || message.id;
+        if (!id || seen.has(id)) return;
+        seen.add(id);
+        messages.push(message);
+      });
+    } catch (err) {
+      sourceError = sourceError || err;
+    }
+  }
+
+  if (!messages.length && sourceError) throw sourceError;
   return messages.sort(newestFirst).slice(0, maxToScan);
 }
 
@@ -145,31 +205,33 @@ app.http('email-inbox', {
         const cfg = await getEmailConfig('gmail');
         if (!cfg?.accessToken) return badRequest('Gmail not connected');
 
-        const q = folder === 'sent' ? 'in:sent' : 'in:inbox';
-        const [profile, listRes, unreadRes] = await Promise.all([
-          folder === 'inbox' ? gmailGet(cfg, '/profile') : Promise.resolve(null),
-          gmailGet(cfg, '/messages', { q, maxResults: GMAIL_MESSAGE_LIMIT }),
-          folder === 'inbox'
-            ? gmailGet(cfg, '/messages', { q: 'is:unread', maxResults: 1 })
-            : Promise.resolve(null)
+        const wantedLabel = folder === 'sent' ? 'SENT' : 'INBOX';
+        const [profile, listRes] = await Promise.all([
+          gmailGet(cfg, '/profile').catch(() => null),
+          gmailGet(cfg, '/messages', { maxResults: GMAIL_SCAN_LIMIT })
         ]);
 
-        const msgIds = (listRes.messages || []).slice(0, GMAIL_MESSAGE_LIMIT);
-        const msgs = await Promise.all(msgIds.map(m => {
-          const params = new URLSearchParams();
-          params.append('format', 'metadata');
-          ['Subject', 'From', 'To', 'Date'].forEach(h => params.append('metadataHeaders', h));
-          return gmailGet(cfg, `/messages/${m.id}`, params);
-        }));
-        const sorted = msgs.sort(newestFirst);
+        const msgIds = (listRes.messages || []).slice(0, GMAIL_SCAN_LIMIT);
+        const msgs = (await mapLimit(msgIds, 10, async m => {
+          try {
+            return await gmailGet(cfg, `/messages/${m.id}`, { format: 'metadata' });
+          } catch {
+            return null;
+          }
+        })).filter(Boolean);
+        const sorted = msgs
+          .filter(m => (m.labelIds || []).includes(wantedLabel))
+          .sort(newestFirst)
+          .slice(0, GMAIL_MESSAGE_LIMIT);
 
         return mailJsonResponse({
           success: true,
           email: profile?.emailAddress || cfg.email,
-          unreadCount: folder === 'inbox' ? unreadRes?.resultSizeEstimate ?? sorted.filter(m => (m.labelIds || []).includes('UNREAD')).length : 0,
+          scannedCount: msgs.length,
+          unreadCount: folder === 'inbox' ? sorted.filter(m => (m.labelIds || []).includes('UNREAD')).length : 0,
           messages: sorted.map(m => {
             const h = {};
-            (m.payload.headers || []).forEach(x => { h[x.name] = x.value; });
+            (m.payload?.headers || []).forEach(x => { h[x.name] = x.value; });
             return { id: m.id, subject: h.Subject || '(no subject)', from: h.From || '', to: h.To || '', date: h.Date || '', unread: (m.labelIds || []).includes('UNREAD') };
           })
         });
@@ -273,7 +335,8 @@ app.http('email-inbox', {
 
       return badRequest('Unknown provider');
     } catch (err) {
-      return mailJsonResponse({ error: err.message }, 500);
+      const labels = { gmail: 'Gmail', outlook: 'Outlook', zoho_mail: 'Zoho Mail' };
+      return mailJsonResponse({ error: `${labels[provider] || 'Mail'}: ${upstreamMailError(err)}` }, 500);
     }
   }
 });
