@@ -74,8 +74,8 @@ async function render_tasks() {
             <div style="flex:1">
               <div style="font-size:13px;font-weight:500;color:var(--text);${t.status === 'done' ? 'text-decoration:line-through;color:var(--text3)' : ''}">${escHtml(t.title)}</div>
               <div style="font-size:11px;color:var(--text3);margin-top:3px">
-                ${isManager() ? '<i class="ti ti-user" style="font-size:11px"></i> ' + escHtml(getUserName(t.assignedTo)) + ' Â· ' : ''}${t.deadline ? (isOverdue ? '<span style="color:#f85149">Overdue</span> Â· ' : '') + 'Due ' + formatDate(t.deadline) : 'No deadline'}
-                ${t.notes && t.notes.length > 0 ? ' Â· <i class="ti ti-message" style="font-size:10px"></i> ' + t.notes.length : ''}
+                ${isManager() ? '<i class="ti ti-user" style="font-size:11px"></i> ' + escHtml(getUserName(t.assignedTo)) + ' · ' : ''}${t.deadline ? (isOverdue ? '<span style="color:#f85149">Overdue</span> · ' : '') + 'Due ' + formatDate(t.deadline) : 'No deadline'}
+                ${t.notes && t.notes.length > 0 ? ' · <i class="ti ti-message" style="font-size:10px"></i> ' + t.notes.length : ''}
               </div>
             </div>
             <div style="display:flex;gap:5px;align-items:center">
@@ -129,7 +129,7 @@ async function renderWeeklyPlan() {
         <div style="flex:1;font-size:12px;color:var(--text);${t.d ? 'text-decoration:line-through;color:var(--text3)' : ''}">${escHtml(t.x || '')}</div>
         <span class="tag ${t.g === 'repair' ? 't-r' : t.g === 'auto' ? 't-a' : t.g === 'iot' ? 't-i' : 't-ad'}">${escHtml(t.g || 'admin')}</span>
         <span class="tag t-g">${t.s === 'wknd' ? 'Wknd' : 'Eve'}</span>
-        <button class="btn bsm bo" onclick="removeWeeklyTask(${weeklyPlanWeek},${i})">Ã—</button>
+        <button class="btn bsm bo" onclick="removeWeeklyTask(${weeklyPlanWeek},${i})">×</button>
       </div>`).join('')}
       <div style="display:flex;gap:6px;margin-top:10px">
         <input id="weeklyTaskText" placeholder="Add a task..." style="flex:1">
@@ -192,9 +192,9 @@ async function renderRecurringTasks(el) {
     } else {
       html += rules.map(r => {
         const schedule = r.frequency === 'weekly'
-          ? `Weekly Â· day ${r.dayOfWeek}`
+          ? `Weekly · day ${r.dayOfWeek}`
           : r.frequency === 'monthly'
-            ? `Monthly Â· day ${r.dayOfMonth}`
+            ? `Monthly · day ${r.dayOfMonth}`
             : 'Daily';
         return `<div class="card" style="margin-bottom:8px;opacity:${r.active === false ? '.55' : '1'}">
           <div style="display:flex;align-items:flex-start;gap:10px">
@@ -202,10 +202,10 @@ async function renderRecurringTasks(el) {
               <div style="font-size:13px;font-weight:500;color:var(--text)">${escHtml(r.title)}</div>
               <div style="font-size:11px;color:var(--text3);margin-top:3px">
                 <i class="ti ti-repeat" style="font-size:10px"></i> ${escHtml(schedule)}
-                Â· ${escHtml(getUserName(r.assignedTo))}
-                Â· ${escHtml(r.category || 'general')}
-                Â· ${escHtml(r.priority || 'medium')}
-                ${r.active === false ? ' Â· paused' : ''}
+                · ${escHtml(getUserName(r.assignedTo))}
+                · ${escHtml(r.category || 'general')}
+                · ${escHtml(r.priority || 'medium')}
+                ${r.active === false ? ' · paused' : ''}
               </div>
             </div>
             <button class="btn bsm bo" onclick="toggleRecurringTask('${r.id}',${r.active === false})">${r.active === false ? 'Resume' : 'Pause'}</button>
@@ -307,7 +307,7 @@ function renderTaskDetail(id, task) {
   }
 
   html += `<div style="font-size:11px;color:var(--text3);margin-bottom:10px">
-    Created ${formatDateTime(task.createdAt)}${task.completedAt ? ' Â· Completed ' + formatDateTime(task.completedAt) : ''}
+    Created ${formatDateTime(task.createdAt)}${task.completedAt ? ' · Completed ' + formatDateTime(task.completedAt) : ''}
   </div>`;
 
   // Status change
@@ -323,7 +323,7 @@ function renderTaskDetail(id, task) {
   if (task.notes && task.notes.length > 0) {
     task.notes.forEach(n => {
       html += `<div class="note-item">
-        <div class="note-meta">${escHtml(n.authorName || getUserName(n.author))} Â· ${timeAgo(n.timestamp)}</div>
+        <div class="note-meta">${escHtml(n.authorName || getUserName(n.author))} · ${timeAgo(n.timestamp)}</div>
         <div class="note-text">${escHtml(n.text)}</div>
       </div>`;
     });

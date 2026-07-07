@@ -1,4 +1,4 @@
-﻿// â”€â”€â”€ PROJECTS PAGE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+﻿// ─── PROJECTS PAGE ────────────────────────────────────────────────────────────
 let projFilter = 'all';
 let projDetailId = null;
 let _allProjects = [];
@@ -53,9 +53,9 @@ async function render_projects() {
               </div>
               <div style="font-size:13px;font-weight:500;color:var(--text)">${escHtml(proj.name)}</div>
               <div style="font-size:11px;color:var(--text3);margin-top:3px">
-                <i class="ti ti-building" style="font-size:10px"></i> ${escHtml(proj.clientName || 'â€”')}
-                ${phases.length > 0 ? ` &nbsp;Â·&nbsp; ${donePhases}/${phases.length} phases` : ''}
-                ${jobCards.length > 0 ? ` &nbsp;Â·&nbsp; <i class="ti ti-clipboard-list" style="font-size:10px"></i> ${jobCards.length} job card${jobCards.length !== 1 ? 's' : ''}` : ''}
+                <i class="ti ti-building" style="font-size:10px"></i> ${escHtml(proj.clientName || '—')}
+                ${phases.length > 0 ? ` &nbsp;·&nbsp; ${donePhases}/${phases.length} phases` : ''}
+                ${jobCards.length > 0 ? ` &nbsp;·&nbsp; <i class="ti ti-clipboard-list" style="font-size:10px"></i> ${jobCards.length} job card${jobCards.length !== 1 ? 's' : ''}` : ''}
               </div>
               ${phaseProgress !== null ? `<div style="margin-top:8px;max-width:300px">
                 <div class="pt"><div class="pf pf-accent" style="width:${phaseProgress}%"></div></div>
@@ -188,7 +188,7 @@ function renderProjDetail(id, proj) {
     <div class="fl" style="margin:0">Linked Job Cards</div>
     ${isManager() && _allJobCards.length > 0 ? `<select id="projLinkJC-${id}" style="font-size:11px;padding:3px 6px" onchange="linkJobCardToProject('${id}', this.value)">
       <option value="">+ Link Job Card</option>
-      ${_allJobCards.filter(jc => !linkedJCs.includes(jc.id)).map(jc => `<option value="${jc.id}">${escHtml(jc.jobNumber)} â€“ ${escHtml(jc.title)}</option>`).join('')}
+      ${_allJobCards.filter(jc => !linkedJCs.includes(jc.id)).map(jc => `<option value="${jc.id}">${escHtml(jc.jobNumber)} – ${escHtml(jc.title)}</option>`).join('')}
     </select>` : ''}
   </div>`;
 
@@ -202,7 +202,7 @@ function renderProjDetail(id, proj) {
       html += `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
         <i class="ti ti-clipboard-list" style="font-size:14px;color:var(--text3);flex-shrink:0"></i>
         <div style="flex:1">
-          <div style="font-size:12px;color:var(--text)">${escHtml(jc.jobNumber)} â€“ ${escHtml(jc.title)}</div>
+          <div style="font-size:12px;color:var(--text)">${escHtml(jc.jobNumber)} – ${escHtml(jc.title)}</div>
           <div style="font-size:10px;color:var(--text3)">${escHtml(jc.clientName)} ${jcStatusBadge(jc.status)}</div>
         </div>
         ${isManager() ? `<button class="btn bsm bo" style="padding:2px 6px" onclick="unlinkJCFromProject('${id}','${jcId}')"><i class="ti ti-unlink" style="font-size:10px"></i></button>` : ''}
@@ -216,7 +216,7 @@ function renderProjDetail(id, proj) {
   if (notes.length > 0) {
     notes.slice().reverse().forEach(n => {
       html += `<div class="note-item">
-        <div class="note-meta">${escHtml(n.authorName || getUserName(n.author))} Â· ${timeAgo(n.timestamp)}</div>
+        <div class="note-meta">${escHtml(n.authorName || getUserName(n.author))} · ${timeAgo(n.timestamp)}</div>
         <div class="note-text">${escHtml(n.text)}</div>
       </div>`;
     });
@@ -239,13 +239,13 @@ function renderProjDetail(id, proj) {
   el.innerHTML = html;
 }
 
-// â”€â”€â”€ HELPERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── HELPERS ───────────────────────────────────────────────────────────────────
 function projStatusBadge(status) {
   const map = { planning: 'b-low', active: 'b-in_progress', on_hold: 'b-medium', completed: 'b-done' };
   return `<span class="bdg ${map[status] || 'b-low'}">${(status || '').replace('_', ' ')}</span>`;
 }
 
-// â”€â”€â”€ CREATE PROJECT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── CREATE PROJECT ────────────────────────────────────────────────────────────
 function showCreateProject() {
   const el = document.getElementById('createProjForm');
   if (el.style.display === 'block') { el.style.display = 'none'; return; }
@@ -254,7 +254,7 @@ function showCreateProject() {
   el.innerHTML = `<div class="card" style="margin-bottom:14px">
     <div class="ctitle">New Project</div>
     <div class="flbl">Project Name *</div>
-    <input type="text" id="projNewName" placeholder="e.g. Automated Irrigation System â€“ Farm X" style="width:100%">
+    <input type="text" id="projNewName" placeholder="e.g. Automated Irrigation System – Farm X" style="width:100%">
     <div class="flbl">Description</div>
     <textarea id="projNewDesc" placeholder="Project scope, objectives, deliverables..." style="width:100%"></textarea>
     <div style="display:flex;gap:8px;margin-top:6px">
@@ -321,7 +321,7 @@ async function submitCreateProject() {
   }
 }
 
-// â”€â”€â”€ STATUS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── STATUS ────────────────────────────────────────────────────────────────────
 async function updateProjStatus(id, status) {
   const data = await apiPut('/projects/' + id, { status });
   if (data && data.error) { ntf(data.error); return; }
@@ -329,7 +329,7 @@ async function updateProjStatus(id, status) {
   render_projects();
 }
 
-// â”€â”€â”€ TEAM â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── TEAM ──────────────────────────────────────────────────────────────────────
 async function addProjAssignee(projId, userId) {
   if (!userId) return;
   const proj = _allProjects.find(p => p.id === projId);
@@ -342,7 +342,7 @@ async function addProjAssignee(projId, userId) {
   render_projects();
 }
 
-// â”€â”€â”€ PHASES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── PHASES ────────────────────────────────────────────────────────────────────
 function showAddPhase(projId) {
   const el = document.getElementById('projPhaseForm-' + projId);
   if (el.style.display === 'block') { el.style.display = 'none'; return; }
@@ -351,7 +351,7 @@ function showAddPhase(projId) {
     <input type="text" id="phName-${projId}" placeholder="Phase name (e.g. Site Survey, Installation, Testing)" style="flex:2">
     <input type="date" id="phDue-${projId}" placeholder="Due date" style="flex:1">
     <button class="btn bsm" onclick="submitAddPhase('${projId}')">Add</button>
-    <button class="btn bsm bo" onclick="document.getElementById('projPhaseForm-${projId}').style.display='none'">âœ•</button>
+    <button class="btn bsm bo" onclick="document.getElementById('projPhaseForm-${projId}').style.display='none'">✕</button>
   </div>`;
 }
 
@@ -380,7 +380,7 @@ async function deletePhase(projId, phaseIdx) {
   render_projects();
 }
 
-// â”€â”€â”€ JOB CARD LINKING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── JOB CARD LINKING ──────────────────────────────────────────────────────────
 async function linkJobCardToProject(projId, jcId) {
   if (!jcId) return;
   const proj = _allProjects.find(p => p.id === projId);
@@ -403,7 +403,7 @@ async function unlinkJCFromProject(projId, jcId) {
   render_projects();
 }
 
-// â”€â”€â”€ NOTES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── NOTES ─────────────────────────────────────────────────────────────────────
 async function addProjNote(projId) {
   const textarea = document.getElementById('projNote-' + projId);
   const text = textarea.value.trim();
@@ -414,7 +414,7 @@ async function addProjNote(projId) {
   render_projects();
 }
 
-// â”€â”€â”€ DELETE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── DELETE ────────────────────────────────────────────────────────────────────
 async function deleteProject(projId) {
   const proj = _allProjects.find(p => p.id === projId);
   if (!confirm('Delete project "' + (proj ? proj.name : projId) + '"? This cannot be undone.')) return;

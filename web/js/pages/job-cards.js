@@ -1,4 +1,4 @@
-﻿// â”€â”€â”€ JOB CARDS PAGE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+﻿// ─── JOB CARDS PAGE ───────────────────────────────────────────────────────────
 let jcFilter = 'active';
 let jcDetailId = null;
 let _allJobCards = [];
@@ -63,16 +63,16 @@ async function render_job_cards() {
               </div>
               <div style="font-size:13px;font-weight:500;color:var(--text)">${escHtml(jc.title)}</div>
               <div style="font-size:11px;color:var(--text3);margin-top:3px">
-                <i class="ti ti-building" style="font-size:10px"></i> ${escHtml(jc.clientName || 'â€”')}
-                ${jc.site ? ' &nbsp;Â·&nbsp; <i class="ti ti-map-pin" style="font-size:10px"></i> ' + escHtml(jc.site) : ''}
-                ${tasks.length > 0 ? ' &nbsp;Â·&nbsp; ' + doneTasks + '/' + tasks.length + ' tasks done' : ''}
+                <i class="ti ti-building" style="font-size:10px"></i> ${escHtml(jc.clientName || '—')}
+                ${jc.site ? ' &nbsp;·&nbsp; <i class="ti ti-map-pin" style="font-size:10px"></i> ' + escHtml(jc.site) : ''}
+                ${tasks.length > 0 ? ' &nbsp;·&nbsp; ' + doneTasks + '/' + tasks.length + ' tasks done' : ''}
               </div>
               ${progress !== null ? `<div style="margin-top:8px;max-width:300px">
                 <div class="pt"><div class="pf pf-brand" style="width:${progress}%"></div></div>
                 <div style="font-size:10px;color:var(--text3);margin-top:3px">${progress}% progress</div>
               </div>` : ''}
               ${(jc.status === 'on_hold' || jc.status === 'blocked') && (jc.blockReason || jc.blockedReason || jc.notes?.length) ? `<div style="font-size:10px;color:#f85149;margin-top:5px">Block: ${escHtml(jc.blockReason || jc.blockedReason || jc.notes?.[jc.notes.length - 1]?.text || 'Waiting for update')}</div>` : ''}
-              ${jc.status === 'completed' ? `<div style="font-size:10px;color:#3fb950;margin-top:5px">Completed${jc.completionSignOff ? ' Â· report signed off' : ''}</div>` : ''}
+              ${jc.status === 'completed' ? `<div style="font-size:10px;color:#3fb950;margin-top:5px">Completed${jc.completionSignOff ? ' · report signed off' : ''}</div>` : ''}
             </div>
             <div style="display:flex;gap:3px;align-items:center;flex-shrink:0">
               ${assigned.map(uid => `<div title="${escHtml(getUserName(uid))}" style="width:24px;height:24px;border-radius:50%;background:var(--brand);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff">${initials(getUserName(uid))}</div>`).join('')}
@@ -138,21 +138,21 @@ async function renderProductionTasks(el) {
     const dl = t.deadline ? new Date(t.deadline + (t.time ? 'T' + t.time : 'T00:00')).getTime() : null;
     const overdue = dl && dl < now && t.status !== 'done';
     const soon = dl && dl < now + 3*86400000 && !overdue && t.status !== 'done';
-    const dlDate = dl ? new Date(dl).toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric'}) : 'â€”';
+    const dlDate = dl ? new Date(dl).toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric'}) : '—';
     return `<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 11px;background:var(--bg3);border:1px solid ${overdue?'rgba(248,81,73,.4)':soon?'rgba(244,163,0,.3)':'var(--border)'};border-radius:var(--radius);margin-bottom:6px;opacity:${t.status==='done'?'.5':'1'}">
       <input type="checkbox" ${t.status==='done'?'checked':''} onchange="toggleProductionTask('${t.id}',this.checked)" style="width:15px;height:15px;flex-shrink:0;cursor:pointer;margin-top:2px">
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;font-weight:500;color:var(--text);text-decoration:${t.status==='done'?'line-through':''}">${escHtml(t.title || '')}</div>
         ${t.description?`<div style="font-size:11px;color:var(--text3);margin-top:2px">${escHtml(t.description)}</div>`:''}
         <div style="display:flex;gap:8px;margin-top:4px;align-items:center;flex-wrap:wrap">
-          <span style="font-size:10px;font-family:'DM Mono',monospace;color:${overdue?'#f85149':soon?'var(--accent)':'var(--text3)'}">${overdue?'OVERDUE Â· ':soon?'Soon Â· ':''}${dlDate}${t.time ? ' Â· ' + escHtml(t.time) : ''}</span>
+          <span style="font-size:10px;font-family:'DM Mono',monospace;color:${overdue?'#f85149':soon?'var(--accent)':'var(--text3)'}">${overdue?'OVERDUE · ':soon?'Soon · ':''}${dlDate}${t.time ? ' · ' + escHtml(t.time) : ''}</span>
           <span style="font-size:10px;padding:1px 7px;border-radius:10px;background:rgba(0,0,0,.2);color:${priorityColor[t.priority]||'var(--text3)'}">${escHtml(t.priority||'medium')}</span>
           ${t.reminder?`<span style="font-size:10px;color:var(--brand-mid)"><i class="ti ti-bell" style="font-size:10px"></i> reminder</span>`:''}
         </div>
       </div>
       <button class="btn bo bsm" onclick="deleteProductionTask('${t.id}')">Delete</button>
     </div>`;
-  }).join('') : '<div style="font-size:12px;color:var(--text3);text-align:center;padding:26px">No tasks yet â€” add one below.</div>';
+  }).join('') : '<div style="font-size:12px;color:var(--text3);text-align:center;padding:26px">No tasks yet — add one below.</div>';
 
   el.innerHTML = `${renderJobTasksTabs()}
   <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Track production tasks, set deadlines, and create AI job cards from Zoho quotes.</div>
@@ -321,7 +321,7 @@ function renderJCDetail(id, jc) {
     html += '<div style="margin-bottom:12px">';
     parts.forEach((p, idx) => {
       html += `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:11px">
-        <div style="flex:1"><span style="color:var(--text)">${escHtml(p.name)}</span>${p.qty ? `<span style="color:var(--text3)"> Ã— ${escHtml(p.qty)}</span>` : ''}${p.note ? `<span style="color:var(--text3)"> â€” ${escHtml(p.note)}</span>` : ''}</div>
+        <div style="flex:1"><span style="color:var(--text)">${escHtml(p.name)}</span>${p.qty ? `<span style="color:var(--text3)"> × ${escHtml(p.qty)}</span>` : ''}${p.note ? `<span style="color:var(--text3)"> — ${escHtml(p.note)}</span>` : ''}</div>
         ${isManager() ? `<button class="btn bsm bdng bo" style="padding:2px 6px" onclick="deleteJCPart('${id}',${idx})"><i class="ti ti-trash" style="font-size:10px"></i></button>` : ''}
       </div>`;
     });
@@ -333,7 +333,7 @@ function renderJCDetail(id, jc) {
   if (notes.length > 0) {
     notes.slice().reverse().forEach(n => {
       html += `<div class="note-item">
-        <div class="note-meta">${escHtml(n.authorName || getUserName(n.author))} Â· ${timeAgo(n.timestamp)}</div>
+        <div class="note-meta">${escHtml(n.authorName || getUserName(n.author))} · ${timeAgo(n.timestamp)}</div>
         <div class="note-text">${escHtml(n.text)}</div>
       </div>`;
     });
@@ -357,13 +357,13 @@ function renderJCDetail(id, jc) {
   el.innerHTML = html;
 }
 
-// â”€â”€â”€ FILTERS & HELPERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── FILTERS & HELPERS ─────────────────────────────────────────────────────────
 function jcStatusBadge(status) {
   const map = { open: 'b-pending', in_progress: 'b-in_progress', on_hold: 'b-medium', completed: 'b-done' };
   return `<span class="bdg ${map[status] || 'b-pending'}">${(status || '').replace('_', ' ')}</span>`;
 }
 
-// â”€â”€â”€ CREATE JOB CARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── CREATE JOB CARD ───────────────────────────────────────────────────────────
 function showCreateJobCard() {
   const el = document.getElementById('createJCForm');
   if (el.style.display === 'block') { el.style.display = 'none'; return; }
@@ -371,7 +371,7 @@ function showCreateJobCard() {
   el.innerHTML = `<div class="card" style="margin-bottom:14px">
     <div class="ctitle">New Job Card</div>
     <div class="flbl">Job Title *</div>
-    <input type="text" id="jcNewTitle" placeholder="e.g. Control Panel Installation â€“ Site A" style="width:100%">
+    <input type="text" id="jcNewTitle" placeholder="e.g. Control Panel Installation – Site A" style="width:100%">
     <div class="flbl">Description</div>
     <textarea id="jcNewDesc" placeholder="Scope of work, site conditions, special requirements..." style="width:100%"></textarea>
     <div style="display:flex;gap:8px;margin-top:6px">
@@ -418,7 +418,7 @@ async function submitCreateJobCard() {
 
   const data = await apiPost('/job-cards', payload);
   if (data && data.jobCard) {
-    ntf('Job card created â€” ' + data.jobCard.jobNumber);
+    ntf('Job card created — ' + data.jobCard.jobNumber);
     document.getElementById('createJCForm').style.display = 'none';
     render_job_cards();
   } else {
@@ -426,7 +426,7 @@ async function submitCreateJobCard() {
   }
 }
 
-// â”€â”€â”€ STATUS UPDATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── STATUS UPDATE ─────────────────────────────────────────────────────────────
 async function updateJCStatus(id, status) {
   const data = await apiPut('/job-cards/' + id, { status });
   if (data && data.error) { ntf(data.error); return; }
@@ -434,7 +434,7 @@ async function updateJCStatus(id, status) {
   render_job_cards();
 }
 
-// â”€â”€â”€ ASSIGN TEAM MEMBER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── ASSIGN TEAM MEMBER ────────────────────────────────────────────────────────
 async function addJCAssignee(jcId, userId) {
   if (!userId) return;
   const jc = _allJobCards.find(c => c.id === jcId);
@@ -447,7 +447,7 @@ async function addJCAssignee(jcId, userId) {
   render_job_cards();
 }
 
-// â”€â”€â”€ TASKS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── TASKS ─────────────────────────────────────────────────────────────────────
 function showAddJCTask(jcId) {
   const el = document.getElementById('jcTaskForm-' + jcId);
   if (el.style.display === 'block') { el.style.display = 'none'; return; }
@@ -460,7 +460,7 @@ function showAddJCTask(jcId) {
       ${appUsers.filter(u => u.active && !((_allJobCards.find(c => c.id === jcId) || {}).assignedTo || []).includes(u.id)).map(u => `<option value="${u.id}">${escHtml(u.displayName)}</option>`).join('')}
     </select>
     <button class="btn bsm" onclick="submitAddJCTask('${jcId}')">Add</button>
-    <button class="btn bsm bo" onclick="document.getElementById('jcTaskForm-${jcId}').style.display='none'">âœ•</button>
+    <button class="btn bsm bo" onclick="document.getElementById('jcTaskForm-${jcId}').style.display='none'">✕</button>
   </div>`;
 }
 
@@ -488,7 +488,7 @@ async function deleteJCTask(jcId, taskId) {
   render_job_cards();
 }
 
-// â”€â”€â”€ PARTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── PARTS ─────────────────────────────────────────────────────────────────────
 function showAddJCPart(jcId) {
   const el = document.getElementById('jcPartForm-' + jcId);
   if (el.style.display === 'block') { el.style.display = 'none'; return; }
@@ -498,7 +498,7 @@ function showAddJCPart(jcId) {
     <input type="text" id="jcPartQty-${jcId}" placeholder="Qty" style="width:60px">
     <input type="text" id="jcPartNote-${jcId}" placeholder="Note (optional)" style="flex:1">
     <button class="btn bsm" onclick="submitAddJCPart('${jcId}')">Add</button>
-    <button class="btn bsm bo" onclick="document.getElementById('jcPartForm-${jcId}').style.display='none'">âœ•</button>
+    <button class="btn bsm bo" onclick="document.getElementById('jcPartForm-${jcId}').style.display='none'">✕</button>
   </div>`;
 }
 
@@ -524,7 +524,7 @@ async function deleteJCPart(jcId, idx) {
   render_job_cards();
 }
 
-// â”€â”€â”€ NOTES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── NOTES ─────────────────────────────────────────────────────────────────────
 async function addJCNote(jcId) {
   const textarea = document.getElementById('jcNote-' + jcId);
   const text = textarea.value.trim();
@@ -535,7 +535,7 @@ async function addJCNote(jcId) {
   render_job_cards();
 }
 
-// â”€â”€â”€ SIGN OFF â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── SIGN OFF ──────────────────────────────────────────────────────────────────
 async function signOffJC(jcId) {
   if (!confirm('Sign off this job card as completed? This confirms all work is done.')) return;
   const data = await apiPut('/job-cards/' + jcId, { signOff: true });
@@ -544,10 +544,10 @@ async function signOffJC(jcId) {
   render_job_cards();
 }
 
-// â”€â”€â”€ DELETE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── DELETE ────────────────────────────────────────────────────────────────────
 async function deleteJC(jcId) {
   const jc = _allJobCards.find(c => c.id === jcId);
-  if (!confirm('Delete job card "' + (jc ? jc.jobNumber + ' â€“ ' + jc.title : jcId) + '"? This cannot be undone.')) return;
+  if (!confirm('Delete job card "' + (jc ? jc.jobNumber + ' – ' + jc.title : jcId) + '"? This cannot be undone.')) return;
   const data = await apiDelete('/job-cards/' + jcId);
   if (data && data.error) { ntf(data.error); return; }
   jcDetailId = null;

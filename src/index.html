@@ -3463,7 +3463,7 @@ async function rSettings(){
     if (!cloud) continue;
     Object.entries(map).forEach(([field, id]) => {
       const v = cloud[field];
-      if (v && v !== '••••••••' && !String(v).includes('â€¢')) setInputValue(id, v);
+      if (v && v !== '••••••••' && !String(v).includes('•')) setInputValue(id, v);
     });
   }
   refreshSettingsRows();
