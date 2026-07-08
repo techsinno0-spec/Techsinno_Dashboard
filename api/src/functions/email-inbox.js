@@ -55,6 +55,21 @@ async function mapLimit(items, limit, mapper) {
   return results;
 }
 
+async function gmailListMessagesSafely(cfg, wantedLabel) {
+  try {
+    return {
+      listRes: await gmailGet(cfg, '/messages', { maxResults: GMAIL_SCAN_LIMIT, labelIds: wantedLabel }),
+      scoped: true
+    };
+  } catch (err) {
+    return {
+      listRes: await gmailGet(cfg, '/messages', { maxResults: GMAIL_SCAN_LIMIT }),
+      scoped: false,
+      fallbackReason: upstreamMailError(err)
+    };
+  }
+}
+
 // Detect a real file attachment in a Gmail metadata payload (parts carry a filename)
 function gmailHasAttachment(payload) {
   const walk = (part) => {
@@ -216,13 +231,12 @@ app.http('email-inbox', {
         if (!cfg?.accessToken) return badRequest('Gmail not connected');
 
         const wantedLabel = folder === 'sent' ? 'SENT' : 'INBOX';
-        const [profile, listRes] = await Promise.all([
+        const [profile, listResult] = await Promise.all([
           gmailGet(cfg, '/profile').catch(() => null),
-          // Scope the scan to the folder's label so the newest 200 are all inbox/sent,
-          // instead of being diluted by archived/other mail (was causing partial sync).
-          gmailGet(cfg, '/messages', { maxResults: GMAIL_SCAN_LIMIT, labelIds: wantedLabel })
+          gmailListMessagesSafely(cfg, wantedLabel)
         ]);
 
+        const listRes = listResult.listRes || {};
         const msgIds = (listRes.messages || []).slice(0, GMAIL_SCAN_LIMIT);
         const msgs = (await mapLimit(msgIds, 10, async m => {
           try {
@@ -240,6 +254,8 @@ app.http('email-inbox', {
           success: true,
           email: profile?.emailAddress || cfg.email,
           scannedCount: msgs.length,
+          scanMode: listResult.scoped ? 'label' : 'fallback',
+          warning: listResult.fallbackReason ? `Gmail folder-scoped scan failed; loaded fallback recent mail: ${listResult.fallbackReason}` : undefined,
           unreadCount: folder === 'inbox' ? sorted.filter(m => (m.labelIds || []).includes('UNREAD')).length : 0,
           messages: sorted.map(m => {
             const h = {};

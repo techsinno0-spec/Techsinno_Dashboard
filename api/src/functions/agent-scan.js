@@ -335,7 +335,7 @@ async function getMailSamples(provider) {
     if (provider === 'zoho_mail') {
       const cfg = await getEmailConfig('zoho_mail');
       if (!cfg?.accessToken || !cfg?.accountId) return [];
-      const data = await zohoGet(cfg, `/accounts/${cfg.accountId}/messages/view`, { limit: 12, sortcolumn: 'date', sortorder: 'desc' });
+      const data = await zohoGet(cfg, `/accounts/${cfg.accountId}/messages/view`, { limit: 12 });
       return (data.data || []).filter(m => !m.isRead).slice(0, 8).map(m => ({
         id: m.messageId, provider, subject: m.subject || '(no subject)', from: m.fromAddress || '', snippet: m.summary || ''
       }));
