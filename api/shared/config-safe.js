@@ -47,7 +47,9 @@ function safeConfig(config, service) {
     src.email ||
     hasSecret(src)
   );
-  safe.connected = !!(src.connected || src.accessToken || src.refreshToken);
+  safe.connected = !!(src.connected || src.accessToken || src.refreshToken) && !src.reconnectRequired;
+  safe.reconnectRequired = !!src.reconnectRequired;
+  safe.lastAuthError = src.lastAuthError || '';
 
   return safe;
 }

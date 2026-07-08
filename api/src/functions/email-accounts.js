@@ -29,9 +29,9 @@ app.http('email-accounts', {
     const accounts = {};
 
     const gmail = await getEmailConfig('gmail');
-    accounts.gmail = gmail?.accessToken
+    accounts.gmail = gmail?.accessToken && !gmail?.reconnectRequired
       ? { connected: true, email: gmail.email || 'Gmail', displayName: gmail.email || 'Gmail User' }
-      : { connected: false };
+      : { connected: false, email: gmail?.email || '', reconnectRequired: !!gmail?.reconnectRequired, error: gmail?.lastAuthError || '' };
 
     const outlook = await getEmailConfig('outlook');
     accounts.outlook = outlook?.accessToken

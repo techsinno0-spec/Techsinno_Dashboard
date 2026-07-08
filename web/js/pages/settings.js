@@ -252,7 +252,11 @@ async function loadServiceConfig(key) {
 function setConfigBadge(key, cfg) {
   const badge = document.getElementById(`cfg-status-${key}`);
   if (!badge) return;
-  if (cfg && cfg.connected) {
+  if (cfg && cfg.reconnectRequired) {
+    badge.textContent = 'Reconnect';
+    badge.style.background = 'rgba(248,81,73,.14)';
+    badge.style.color = '#f85149';
+  } else if (cfg && cfg.connected) {
     badge.textContent = 'Connected';
     badge.style.background = '#3fb95020';
     badge.style.color = '#3fb950';

@@ -55,13 +55,31 @@ async function ensureGmailToken(config) {
     client_secret: config.clientSecret,
     refresh_token: config.refreshToken
   });
-  const r = await axios.post(GMAIL_TOKEN_URL, p.toString(), {
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-  });
+  let r;
+  try {
+    r = await axios.post(GMAIL_TOKEN_URL, p.toString(), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+  } catch (err) {
+    const tokenError = err.response?.data?.error;
+    if (tokenError === 'invalid_grant') {
+      await saveEmailConfig('gmail', {
+        accessToken: null,
+        refreshToken: null,
+        tokenExpiry: 0,
+        reconnectRequired: true,
+        lastAuthError: 'Gmail authorization expired or was revoked. Reconnect Gmail.'
+      });
+      throw new Error('Gmail authorization expired or was revoked. Reconnect Gmail in Settings.');
+    }
+    throw err;
+  }
   const token = r.data.access_token;
   await saveEmailConfig('gmail', {
     accessToken: token,
-    tokenExpiry: Date.now() + r.data.expires_in * 1000
+    tokenExpiry: Date.now() + r.data.expires_in * 1000,
+    reconnectRequired: false,
+    lastAuthError: null
   });
   return token;
 }
