@@ -1,7 +1,7 @@
 const SERVICES = [
   { key: 'zoho_books', label: 'Zoho Books', icon: 'ti-chart-bar', fields: ['clientId', 'clientSecret', 'region', 'orgId'], note: 'Bookkeeping, invoices, expenses, reports. Owner-only.' },
   { key: 'zoho_mail', label: 'Zoho Mail', icon: 'ti-mail', fields: ['clientId', 'clientSecret', 'region'], note: 'Primary company mailbox for customer replies and AI email scans.' },
-  { key: 'gmail', label: 'Gmail', icon: 'ti-brand-gmail', fields: ['clientId', 'clientSecret'], note: 'Google mailbox connection for shared inbox workflows.' },
+  { key: 'gmail', label: 'Gmail', icon: 'ti-brand-gmail', fields: ['clientId', 'clientSecret', 'email'], note: 'Google mailbox connection for shared inbox workflows. Use the Gmail account you want the dashboard to read.' },
   { key: 'outlook', label: 'Outlook', icon: 'ti-brand-windows', fields: ['clientId', 'clientSecret'], note: 'Microsoft mailbox connection for shared inbox workflows.' },
   { key: 'linkedin', label: 'LinkedIn', icon: 'ti-brand-linkedin', fields: ['clientId', 'clientSecret'], note: 'Company page/social publishing connection.' },
   { key: 'claude', label: 'Claude AI', icon: 'ti-robot', fields: ['apiKey'], note: 'AI assistant key used for drafts, scans, suggestions, and analysis.' },
@@ -190,11 +190,16 @@ async function connectServiceOAuth(key) {
   const saved = await saveServiceConfigIfEntered(key);
   if (!saved) return;
   try {
+    const params = new URLSearchParams();
     const regionValue = document.getElementById(`cfg-${key}-region`)?.value;
-    const regionQuery = regionValue ? `?region=${encodeURIComponent(regionValue)}` : '';
+    const accountValue = document.getElementById(`cfg-${key}-email`)?.value.trim();
+    if (regionValue) params.set('region', regionValue);
+    if (key === 'gmail' && accountValue) params.set('account', accountValue);
+    const qs = params.toString();
+    const query = qs ? `?${qs}` : '';
     const data = key === 'zoho_books'
-      ? await apiGet('/zoho-books/connect' + regionQuery)
-      : await apiGet('/email/connect/' + key + regionQuery);
+      ? await apiGet('/zoho-books/connect' + query)
+      : await apiGet('/email/connect/' + key + query);
     if (!data?.url) { ntf('Failed to get authorization URL'); return; }
     if (data.redirectUri) {
       const redirectEl = document.getElementById(`cfg-redirect-${key}`);

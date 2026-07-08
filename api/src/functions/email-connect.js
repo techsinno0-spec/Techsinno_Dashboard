@@ -23,7 +23,18 @@ app.http('email-connect', {
       if (!clientId) return badRequest('Gmail Client ID not configured — add it in Settings');
       const redirectUri = `${base}/api/email/callback/gmail`;
       const state = await createOAuthState(provider, decoded, { redirectUri });
-      const url = `${GMAIL_AUTH_URL}?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(GMAIL_SCOPES)}&access_type=offline&prompt=consent&state=${state}`;
+      const loginHint = (urlParams.get('account') || process.env.GMAIL_LOGIN_HINT || cfg?.email || '').trim();
+      const params = new URLSearchParams({
+        response_type: 'code',
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        scope: GMAIL_SCOPES,
+        access_type: 'offline',
+        prompt: 'select_account consent',
+        state
+      });
+      if (loginHint) params.set('login_hint', loginHint);
+      const url = `${GMAIL_AUTH_URL}?${params.toString()}`;
       return jsonResponse({ url, redirectUri });
     }
 
