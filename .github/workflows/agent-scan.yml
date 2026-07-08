@@ -1,0 +1,61 @@
+name: Agent scan (scheduled)
+
+# Runs the cloud AI agent scan on a schedule so both the web app and the
+# desktop app always see a fresh queue — without either app being open.
+# The scan runs server-side (/api/agent/scan) and writes to the shared
+# Cosmos queue, which both clients read from.
+
+on:
+  schedule:
+    # Every 2 hours, on the hour (UTC). SAST is UTC+2.
+    # For hourly, change to:  '0 * * * *'
+    - cron: '0 */2 * * *'
+  # Adds a "Run workflow" button in the GitHub Actions tab for manual scans.
+  workflow_dispatch: {}
+
+# Never let two scans overlap.
+concurrency:
+  group: agent-scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger cloud agent scan
+        env:
+          API_BASE: ${{ secrets.DASHBOARD_API_BASE }}
+          SCAN_USERNAME: ${{ secrets.SCAN_USERNAME }}
+          SCAN_PASSWORD: ${{ secrets.SCAN_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${API_BASE:-}" ]; then echo "DASHBOARD_API_BASE secret is not set"; exit 1; fi
+
+          echo "Logging in as scan user..."
+          LOGIN=$(curl -sS -X POST "$API_BASE/api/auth/login" \
+            -H "Content-Type: application/json" \
+            -d "{\"username\":\"$SCAN_USERNAME\",\"password\":\"$SCAN_PASSWORD\"}")
+
+          TOKEN=$(echo "$LOGIN" | jq -r '.token // empty')
+          if [ -z "$TOKEN" ]; then
+            echo "Login failed (no token returned). Check SCAN_USERNAME / SCAN_PASSWORD / DASHBOARD_API_BASE."
+            # Do not print $LOGIN in full — it may contain sensitive detail.
+            exit 1
+          fi
+          echo "Login OK."
+
+          echo "Running agent scan..."
+          RESP=$(curl -sS -X POST "$API_BASE/api/agent/scan" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{}')
+
+          # Show a compact summary (never the token).
+          echo "$RESP" | jq '{success, newItems, lastScan, errors}' || echo "$RESP"
+
+          if echo "$RESP" | jq -e 'has("error")' >/dev/null 2>&1; then
+            echo "Scan reported an error."
+            exit 1
+          fi
+          echo "Scan complete."
