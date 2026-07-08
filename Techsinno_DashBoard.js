@@ -1627,24 +1627,37 @@ ipcMain.handle('zohomail-send', async (_, { to, subject, body, from, attachments
     const payload = { fromAddress, toAddress: to, subject, content: body, mailFormat: 'plaintext' };
     if (attachments && attachments.length > 0) {
       const uploadedAtts = [];
+      const uploadErrors = [];
       const token = await zohomailEnsureToken();
       const region = store.get('zohomail_region', 'com');
+      const FormData = require('form-data');
       for (const att of attachments) {
         try {
           const buf = Buffer.from(att.base64, 'base64');
-          const FormData = require('form-data');
           const form = new FormData();
-          form.append('attach', buf, { filename: att.name, contentType: att.mimeType });
+          form.append('attach', buf, { filename: att.name, contentType: att.mimeType || 'application/octet-stream' });
           const upRes = await axios.post(`https://mail.zoho.${region}/api/accounts/${accountId}/messages/attachments?uploadType=multipart`, form, {
-            headers: { ...form.getHeaders(), Authorization: `Zoho-oauthtoken ${token}` }
+            headers: { ...form.getHeaders(), Authorization: `Zoho-oauthtoken ${token}` },
+            maxBodyLength: Infinity,
+            maxContentLength: Infinity
           });
-          const upData = upRes.data?.data || upRes.data;
-          const storeName = upData?.storeName || upData?.attachments?.[0]?.storeName;
-          if (storeName) uploadedAtts.push({ storeName, attachmentName: att.name });
-          else console.log('Zoho upload response (no storeName):', JSON.stringify(upRes.data));
-        } catch(upErr) { console.log('Zoho attachment upload error:', upErr.response?.data || upErr.message); }
+          // Zoho returns { status, data: [ { storeName, attachmentName, attachmentPath } ] }
+          const raw = upRes.data?.data ?? upRes.data;
+          const info = Array.isArray(raw) ? raw[0] : raw;
+          if (info?.storeName && info?.attachmentPath) {
+            uploadedAtts.push({ storeName: info.storeName, attachmentPath: info.attachmentPath, attachmentName: info.attachmentName || att.name });
+          } else {
+            uploadErrors.push(`${att.name}: unexpected upload response`);
+            console.log('Zoho upload response (no storeName/path):', JSON.stringify(upRes.data));
+          }
+        } catch(upErr) {
+          uploadErrors.push(`${att.name}: ${upErr.response?.data ? JSON.stringify(upErr.response.data) : upErr.message}`);
+          console.log('Zoho attachment upload error:', upErr.response?.data || upErr.message);
+        }
       }
-      if (uploadedAtts.length) payload.attachments = uploadedAtts;
+      // Do not silently send without the attachments the user asked for.
+      if (!uploadedAtts.length) return { error: `Attachment upload to Zoho failed: ${uploadErrors.join('; ') || 'unknown error'}` };
+      payload.attachments = uploadedAtts;
     }
     await zohomailPost(`/accounts/${accountId}/messages`, payload);
     return { success: true };
