@@ -55,6 +55,16 @@ async function mapLimit(items, limit, mapper) {
   return results;
 }
 
+// Detect a real file attachment in a Gmail metadata payload (parts carry a filename)
+function gmailHasAttachment(payload) {
+  const walk = (part) => {
+    if (!part) return false;
+    if (part.filename && part.filename.trim() && (part.body?.attachmentId || part.body?.size)) return true;
+    return (part.parts || []).some(walk);
+  };
+  return !!payload && (payload.parts || []).some(walk);
+}
+
 function zohoRecipientText(message) {
   return [
     message.toAddress,
@@ -208,7 +218,9 @@ app.http('email-inbox', {
         const wantedLabel = folder === 'sent' ? 'SENT' : 'INBOX';
         const [profile, listRes] = await Promise.all([
           gmailGet(cfg, '/profile').catch(() => null),
-          gmailGet(cfg, '/messages', { maxResults: GMAIL_SCAN_LIMIT })
+          // Scope the scan to the folder's label so the newest 200 are all inbox/sent,
+          // instead of being diluted by archived/other mail (was causing partial sync).
+          gmailGet(cfg, '/messages', { maxResults: GMAIL_SCAN_LIMIT, labelIds: wantedLabel })
         ]);
 
         const msgIds = (listRes.messages || []).slice(0, GMAIL_SCAN_LIMIT);
@@ -232,7 +244,7 @@ app.http('email-inbox', {
           messages: sorted.map(m => {
             const h = {};
             (m.payload?.headers || []).forEach(x => { h[x.name] = x.value; });
-            return { id: m.id, subject: h.Subject || '(no subject)', from: h.From || '', to: h.To || '', date: h.Date || '', unread: (m.labelIds || []).includes('UNREAD') };
+            return { id: m.id, subject: h.Subject || '(no subject)', from: h.From || '', to: h.To || '', date: h.Date || '', unread: (m.labelIds || []).includes('UNREAD'), hasAttachment: gmailHasAttachment(m.payload) };
           })
         });
       }
@@ -243,7 +255,7 @@ app.http('email-inbox', {
 
         if (folder === 'sent') {
           const msgs = await msGet(cfg, '/me/mailFolders/SentItems/messages', {
-            '$select': 'subject,toRecipients,from,sentDateTime', '$top': OUTLOOK_MESSAGE_LIMIT, '$orderby': 'sentDateTime desc'
+            '$select': 'subject,toRecipients,from,sentDateTime,hasAttachments', '$top': OUTLOOK_MESSAGE_LIMIT, '$orderby': 'sentDateTime desc'
           });
           return mailJsonResponse({
             success: true,
@@ -251,14 +263,15 @@ app.http('email-inbox', {
             messages: (msgs.value || []).map(m => ({
               id: m.id, subject: m.subject || '(no subject)',
               to: (m.toRecipients || []).map(r => r.emailAddress?.address || '').join(', '),
-              from: m.from?.emailAddress?.address || '', date: m.sentDateTime
+              from: m.from?.emailAddress?.address || '', date: m.sentDateTime,
+              hasAttachment: !!m.hasAttachments
             }))
           });
         }
 
         const [msFolder, msgs] = await Promise.all([
           msGet(cfg, '/me/mailFolders/Inbox'),
-          msGet(cfg, '/me/mailFolders/Inbox/messages', { '$select': 'subject,from,receivedDateTime,isRead', '$top': OUTLOOK_MESSAGE_LIMIT, '$orderby': 'receivedDateTime desc' })
+          msGet(cfg, '/me/mailFolders/Inbox/messages', { '$select': 'subject,from,receivedDateTime,isRead,hasAttachments', '$top': OUTLOOK_MESSAGE_LIMIT, '$orderby': 'receivedDateTime desc' })
         ]);
         const sorted = (msgs.value || []).sort(newestFirst);
         return mailJsonResponse({
@@ -268,7 +281,8 @@ app.http('email-inbox', {
           messages: sorted.map(m => ({
             id: m.id, subject: m.subject || '(no subject)',
             from: m.from?.emailAddress?.name || m.from?.emailAddress?.address || '',
-            date: m.receivedDateTime, unread: !m.isRead
+            date: m.receivedDateTime, unread: !m.isRead,
+            hasAttachment: !!m.hasAttachments
           }))
         });
       }

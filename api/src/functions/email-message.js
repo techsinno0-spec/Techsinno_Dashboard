@@ -271,26 +271,26 @@ app.http('email-message', {
         const rawContent = msg.content || msg.body || '';
         const looksHtml = hasRealHtml(rawContent);
 
-        let attachments = flattenZohoAttachments(msg, folderId);
-        if (!attachments.length) {
+        // Make sure we know the folder — attachment access is far more reliable with it.
+        if (!folderId) {
           try {
-            if (!folderId) {
-              const folders = await zohoGet(cfg, `/accounts/${accountId}/folders`);
-              const inbox = (folders.data || []).find(f => f.folderName === 'Inbox' || f.path === 'Inbox');
-              if (inbox) folderId = inbox.folderId;
-            }
-            if (folderId) {
-              const msgMeta = await zohoGet(cfg, `/accounts/${accountId}/folders/${folderId}/messages/${messageId}`);
-              const metaAttachments = flattenZohoAttachments(msgMeta, folderId);
-              if (metaAttachments.length) {
-                attachments = metaAttachments;
-              } else {
-                attachments = await getZohoAttachmentInfo(cfg, accountId, folderId, messageId);
-              }
-            }
+            const folders = await zohoGet(cfg, `/accounts/${accountId}/folders`);
+            const inbox = (folders.data || []).find(f => f.folderName === 'Inbox' || f.path === 'Inbox');
+            if (inbox) folderId = inbox.folderId;
           } catch {}
         }
-        attachments = attachments.map(a => ({ ...a, accountId }));
+
+        // attachmentinfo returns reliable attachmentId + size, so prefer it; fall back to
+        // whatever the content/meta responses expose.
+        let attachments = await getZohoAttachmentInfo(cfg, accountId, folderId, messageId);
+        if (!attachments.length) attachments = flattenZohoAttachments(msg, folderId);
+        if (!attachments.length && folderId) {
+          try {
+            const msgMeta = await zohoGet(cfg, `/accounts/${accountId}/folders/${folderId}/messages/${messageId}`);
+            attachments = flattenZohoAttachments(msgMeta, folderId);
+          } catch {}
+        }
+        attachments = attachments.map(a => ({ ...a, folderId: a.folderId || folderId || '', accountId }));
 
         return jsonResponse({
           success: true,

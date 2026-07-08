@@ -78,25 +78,47 @@ app.http('email-send', {
 
         if (attachments?.length > 0) {
           const uploadedAtts = [];
+          const uploadErrors = [];
           const token = await ensureZohoToken(cfg);
           const region = getZohoRegion(cfg.region || 'com');
+          const FormData = require('form-data');
 
           for (const att of attachments) {
             try {
               const buf = Buffer.from(att.base64, 'base64');
-              const FormData = require('form-data');
               const form = new FormData();
-              form.append('attach', buf, { filename: att.name, contentType: att.mimeType });
+              form.append('attach', buf, { filename: att.name, contentType: att.mimeType || 'application/octet-stream' });
               const upRes = await axios.post(
                 `${region.mail}/api/accounts/${cfg.accountId}/messages/attachments?uploadType=multipart`,
-                form, { headers: { ...form.getHeaders(), Authorization: `Zoho-oauthtoken ${token}` } }
+                form,
+                {
+                  headers: { ...form.getHeaders(), Authorization: `Zoho-oauthtoken ${token}` },
+                  maxBodyLength: Infinity,
+                  maxContentLength: Infinity
+                }
               );
-              const upData = upRes.data?.data || upRes.data;
-              const storeName = upData?.storeName || (Array.isArray(upData) ? upData[0]?.storeName : null);
-              if (storeName) uploadedAtts.push({ storeName, attachmentName: att.name });
-            } catch {}
+              // Zoho returns { status, data: [ { storeName, attachmentName, attachmentPath } ] }
+              const raw = upRes.data?.data ?? upRes.data;
+              const info = Array.isArray(raw) ? raw[0] : raw;
+              if (info?.storeName && info?.attachmentPath) {
+                uploadedAtts.push({
+                  storeName: info.storeName,
+                  attachmentPath: info.attachmentPath,
+                  attachmentName: info.attachmentName || att.name
+                });
+              } else {
+                uploadErrors.push(`${att.name}: unexpected upload response`);
+              }
+            } catch (e) {
+              uploadErrors.push(`${att.name}: ${e.response?.data ? JSON.stringify(e.response.data) : e.message}`);
+            }
           }
-          if (uploadedAtts.length) payload.attachments = uploadedAtts;
+
+          // Do not silently send without the attachments the user asked for.
+          if (!uploadedAtts.length) {
+            return jsonResponse({ error: `Attachment upload to Zoho failed: ${uploadErrors.join('; ') || 'unknown error'}` }, 502);
+          }
+          payload.attachments = uploadedAtts;
         }
 
         await zohoPost(cfg, `/accounts/${cfg.accountId}/messages`, payload);
