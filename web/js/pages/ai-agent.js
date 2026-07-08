@@ -135,6 +135,8 @@ function webAgentRenderItem(item) {
   const flagColor = webAgentFlagColor[item.flagType] || 'var(--text3)';
   const preview = (item.body || '').slice(0, 180).replace(/\n/g, ' ');
   const actionBtn = item.action && item.action.kind ? `<button class="btn bsm" onclick="webAgentRunAction('${item.id}')"><i class="ti ti-player-play"></i> ${escHtml(item.action.label || 'Approve action')}</button>` : '';
+  const sendable = ['email_reply', 'cold_email'].includes(item.type) && item.to && item.provider;
+  const sendBtn = sendable ? `<button class="btn bsm" onclick="webAgentReviewSend('${item.id}')"><i class="ti ti-send"></i> Review &amp; send</button>` : '';
   const diagnostic = (item.painPoint || item.evidence || item.techsinnoSolution || item.nextStep) ? `<div style="background:rgba(95,168,196,.08);border:1px solid rgba(95,168,196,.18);border-radius:var(--radius-sm);padding:8px 10px;margin:7px 0">
     <div style="font-size:10px;color:var(--brand-mid);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Problem spotted</div>
     ${item.painPoint ? `<div style="font-size:11px;color:var(--text);margin-bottom:3px"><strong>Pain:</strong> ${escHtml(item.painPoint)}</div>` : ''}
@@ -154,11 +156,74 @@ function webAgentRenderItem(item) {
     ${diagnostic}
     <div style="font-size:11px;color:var(--text2);line-height:1.5;margin:6px 0 9px;background:var(--bg4);padding:7px 9px;border-radius:var(--radius-sm)">${escHtml(preview)}${item.body && item.body.length > 180 ? '…' : ''}</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
+      ${sendBtn}
       ${actionBtn}
       ${item.url ? `<button class="btn bsm" onclick="window.open('${item.url}','_blank')"><i class="ti ti-external-link"></i> View</button>` : ''}
       <button class="btn bsm bo" onclick="webAgentCopy('${item.id}')"><i class="ti ti-copy"></i> Copy</button>
     </div>
+    <div id="agsend-${item.id}" data-open="0"></div>
   </div>`;
+}
+
+// Inline editor: review the AI-drafted email, tweak it, then send via the real mail endpoint.
+function webAgentReviewSend(id) {
+  const item = webAgentQueue.find(i => i.id === id);
+  if (!item) return;
+  const box = document.getElementById('agsend-' + id);
+  if (!box) return;
+  if (box.dataset.open === '1') { box.innerHTML = ''; box.dataset.open = '0'; return; }
+  box.dataset.open = '1';
+  box.innerHTML = `
+    <div style="margin-top:8px;padding:10px;background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius-sm)">
+      <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:4px">TO · via ${escHtml(item.provider || '')}</div>
+      <input id="agsend-to-${id}" type="email" value="${escHtml(item.to || '')}" style="width:100%;font-size:12px;margin-bottom:6px;box-sizing:border-box">
+      <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:4px">SUBJECT</div>
+      <input id="agsend-subject-${id}" type="text" value="${escHtml(item.subject || '')}" style="width:100%;font-size:12px;margin-bottom:6px;box-sizing:border-box">
+      <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:4px">MESSAGE</div>
+      <textarea id="agsend-body-${id}" style="width:100%;font-size:12px;min-height:160px;resize:vertical;box-sizing:border-box">${escHtml(item.body || '')}</textarea>
+      <div id="agsend-err-${id}" style="font-size:11px;color:#f85149;margin-top:6px"></div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="btn bsm" id="agsend-btn-${id}" onclick="webAgentSendEmail('${id}')"><i class="ti ti-send"></i> Send now</button>
+        <button class="btn bsm bo" onclick="webAgentReviewSend('${id}')">Close</button>
+      </div>
+    </div>`;
+}
+
+async function webAgentSendEmail(id) {
+  const item = webAgentQueue.find(i => i.id === id);
+  if (!item) return;
+  const provider = item.provider;
+  const to = document.getElementById('agsend-to-' + id)?.value.trim();
+  const subject = document.getElementById('agsend-subject-' + id)?.value.trim();
+  const body = document.getElementById('agsend-body-' + id)?.value;
+  const err = document.getElementById('agsend-err-' + id);
+  const setErr = (t) => { if (err) err.textContent = t; };
+
+  if (!provider) return setErr('No email provider on this item');
+  if (!to) return setErr('Recipient is required');
+  if (!subject) return setErr('Subject is required');
+  if (!confirm(`Send this email via ${provider} to ${to}?`)) return;
+  setErr('');
+
+  const btn = document.getElementById('agsend-btn-' + id);
+  if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spin" style="width:12px;height:12px;border-width:2px"></div> Sending...'; }
+
+  try {
+    const data = await apiPost(`/email/send/${provider}`, { to, subject, body });
+    if (data && data.error) {
+      setErr(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-send"></i> Send now'; }
+      return;
+    }
+    webAgentQueue = webAgentQueue.map(i => i.id === id ? { ...i, status: 'approved', approvedAt: Date.now() } : i);
+    await apiPut('/agent/queue', { queue: webAgentQueue, lastScan: webAgentLastScan });
+    ntf('Email sent');
+    webAgentUpdateStats();
+    webAgentRenderTab();
+  } catch {
+    setErr('Failed to send email');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-send"></i> Send now'; }
+  }
 }
 
 function webAgentRenderOpportunities() {
