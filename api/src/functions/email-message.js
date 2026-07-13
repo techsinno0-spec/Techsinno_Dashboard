@@ -129,6 +129,29 @@ function gmailFilenameFromHeaders(headers = []) {
   return plain ? plain[1] : '';
 }
 
+function extractAddressParts(value) {
+  if (!value) return [];
+  if (typeof value === 'string' || typeof value === 'number') return [String(value)];
+  if (Array.isArray(value)) return value.flatMap(extractAddressParts);
+  if (typeof value === 'object') {
+    return [
+      value.address,
+      value.email,
+      value.emailAddress,
+      value.mail,
+      value.name,
+      value.displayName,
+      value.fromAddress,
+      value.toAddress
+    ].flatMap(extractAddressParts);
+  }
+  return [];
+}
+
+function addressText(...values) {
+  return values.flatMap(extractAddressParts).filter(Boolean).join(', ');
+}
+
 function flattenZohoAttachments(raw, folderId) {
   const candidates = [
     raw?.attachments,
@@ -295,8 +318,8 @@ app.http('email-message', {
         return jsonResponse({
           success: true,
           subject: msg.subject || '(no subject)',
-          from: msg.fromAddress || msg.from || '',
-          to: msg.toAddress || '',
+          from: addressText(msg.fromAddress, msg.from) || '',
+          to: addressText(msg.toAddress, msg.to, msg.recipientAddress, msg.recipients) || '',
           date: msg.receivedTime ? new Date(parseInt(msg.receivedTime)).toISOString() : '',
           ...buildEmailBody({ html: looksHtml ? rawContent : '', text: looksHtml ? '' : rawContent }),
           attachments

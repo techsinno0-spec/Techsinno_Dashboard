@@ -181,16 +181,34 @@ app.http('email-callback', {
             const acctRes = await axios.get(`${apiBase}/accounts`, {
               headers: { Authorization: `Zoho-oauthtoken ${tokenData.access_token}` }
             });
-            const acct = (acctRes.data.data || [])[0];
+            const accounts = Array.isArray(acctRes.data.data) ? acctRes.data.data.filter(a => a?.accountId) : [];
+            const acct = accounts[0];
             if (acct?.accountId) {
               updates.region = region;
               updates.accountId = acct.accountId;
-              const sends = acct.sendMailDetails || [];
+              updates.accounts = accounts.map(a => ({
+                accountId: a.accountId,
+                primaryEmailAddress: a.primaryEmailAddress || a.emailAddress || '',
+                email: a.emailAddress || a.primaryEmailAddress || '',
+                name: a.accountDisplayName || a.displayName || a.primaryEmailAddress || '',
+                aliases: (a.sendMailDetails || []).map(s => ({
+                  address: s.fromAddress,
+                  name: s.displayName || s.fromAddress,
+                  isDefault: !!(s.isDefault || s.isPrimary)
+                })).filter(alias => alias.address)
+              }));
+              const sends = accounts.flatMap(a => a.sendMailDetails || []);
               updates.aliases = sends.map(s => ({
                 address: s.fromAddress,
                 name: s.displayName || s.fromAddress,
                 isDefault: !!(s.isDefault || s.isPrimary)
-              }));
+              })).filter(alias => alias.address);
+              if (!updates.aliases.length && accounts.length) {
+                updates.aliases = accounts
+                  .map(a => a.primaryEmailAddress || a.emailAddress)
+                  .filter(Boolean)
+                  .map((address, index) => ({ address, name: address, isDefault: index === 0 }));
+              }
               if (!updates.aliases.length) {
                 updates.aliases = [{ address: acct.primaryEmailAddress || 'user@zoho.com', name: 'Zoho User', isDefault: true }];
               }

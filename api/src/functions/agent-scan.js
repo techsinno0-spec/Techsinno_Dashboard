@@ -330,15 +330,130 @@ If no action is needed, return [].` }]
   }));
 }
 
+const ZOHO_AGENT_SCAN_LIMIT = 40;
+
+function zohoMessageTime(message) {
+  const raw =
+    message.receivedTime ||
+    message.sentDateInGMT ||
+    message.date ||
+    message.receivedDateTime ||
+    message.sentDateTime ||
+    0;
+  const n = Number(raw);
+  if (Number.isFinite(n) && n > 0) return n;
+  const parsed = Date.parse(raw);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function newestZohoFirst(a, b) {
+  return zohoMessageTime(b) - zohoMessageTime(a);
+}
+
+function extractAddressParts(value) {
+  if (!value) return [];
+  if (typeof value === 'string' || typeof value === 'number') return [String(value)];
+  if (Array.isArray(value)) return value.flatMap(extractAddressParts);
+  if (typeof value === 'object') {
+    return [
+      value.address,
+      value.email,
+      value.emailAddress,
+      value.mail,
+      value.name,
+      value.displayName,
+      value.fromAddress,
+      value.toAddress
+    ].flatMap(extractAddressParts);
+  }
+  return [];
+}
+
+function zohoAddressText(...values) {
+  return values.flatMap(extractAddressParts).filter(Boolean).join(', ');
+}
+
+function findZohoInboxFolder(folders) {
+  const list = Array.isArray(folders?.data) ? folders.data : [];
+  return list.find(f => {
+    const name = String(f.folderName || '').toLowerCase();
+    const path = String(f.path || '').toLowerCase();
+    const type = String(f.folderType || '').toLowerCase();
+    return name === 'inbox' || path === 'inbox' || type === 'inbox';
+  });
+}
+
+async function getZohoMailAccounts(cfg) {
+  try {
+    const data = await zohoGet(cfg, '/accounts');
+    const accounts = Array.isArray(data.data) ? data.data.filter(a => a?.accountId) : [];
+    if (accounts.length) return accounts;
+  } catch {}
+
+  if (Array.isArray(cfg.accounts) && cfg.accounts.some(a => a?.accountId)) {
+    return cfg.accounts.filter(a => a?.accountId);
+  }
+
+  return [{ accountId: cfg.accountId, primaryEmailAddress: cfg.email }].filter(a => a.accountId);
+}
+
+async function fetchZohoAccountMessages(cfg, accountId) {
+  let folderId = '';
+  try {
+    const folders = await zohoGet(cfg, `/accounts/${accountId}/folders`);
+    folderId = findZohoInboxFolder(folders)?.folderId || '';
+  } catch {}
+
+  const sources = folderId
+    ? [
+        { path: `/accounts/${accountId}/folders/${folderId}/messages/view`, params: {} },
+        { path: `/accounts/${accountId}/messages/view`, params: { folderId } }
+      ]
+    : [{ path: `/accounts/${accountId}/messages/view`, params: {} }];
+
+  const messages = [];
+  const seen = new Set();
+
+  for (const source of sources) {
+    try {
+      const data = await zohoGet(cfg, source.path, { ...source.params, limit: ZOHO_AGENT_SCAN_LIMIT });
+      (data.data || []).forEach(message => {
+        const id = message.messageId || message.mailId || message.id;
+        if (!id || seen.has(id)) return;
+        seen.add(id);
+        messages.push({ ...message, accountId, folderId: message.folderId || folderId });
+      });
+    } catch {}
+  }
+
+  return messages;
+}
+
 async function getMailSamples(provider) {
   try {
     if (provider === 'zoho_mail') {
       const cfg = await getEmailConfig('zoho_mail');
       if (!cfg?.accessToken || !cfg?.accountId) return [];
-      const data = await zohoGet(cfg, `/accounts/${cfg.accountId}/messages/view`, { limit: 12 });
-      return (data.data || []).filter(m => !m.isRead).slice(0, 8).map(m => ({
-        id: m.messageId, provider, subject: m.subject || '(no subject)', from: m.fromAddress || '', snippet: m.summary || ''
-      }));
+      const accounts = await getZohoMailAccounts(cfg);
+      const allMessages = [];
+      for (const account of accounts) {
+        const accountMessages = await fetchZohoAccountMessages(cfg, account.accountId);
+        allMessages.push(...accountMessages);
+      }
+      return allMessages
+        .sort(newestZohoFirst)
+        .filter(m => !m.isRead)
+        .slice(0, 8)
+        .map(m => ({
+          id: m.messageId || m.mailId || m.id,
+          provider,
+          accountId: m.accountId,
+          folderId: m.folderId || '',
+          subject: m.subject || '(no subject)',
+          from: zohoAddressText(m.fromAddress, m.from),
+          to: zohoAddressText(m.toAddress, m.to, m.recipientAddress, m.recipients),
+          snippet: m.summary || ''
+        }));
     }
     if (provider === 'gmail') {
       const cfg = await getEmailConfig('gmail');

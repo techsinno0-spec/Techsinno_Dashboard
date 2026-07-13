@@ -80,13 +80,46 @@ function gmailHasAttachment(payload) {
   return !!payload && (payload.parts || []).some(walk);
 }
 
+function extractAddressParts(value) {
+  if (!value) return [];
+  if (typeof value === 'string' || typeof value === 'number') return [String(value)];
+  if (Array.isArray(value)) return value.flatMap(extractAddressParts);
+  if (typeof value === 'object') {
+    return [
+      value.address,
+      value.email,
+      value.emailAddress,
+      value.mail,
+      value.name,
+      value.displayName,
+      value.fromAddress,
+      value.toAddress
+    ].flatMap(extractAddressParts);
+  }
+  return [];
+}
+
+function zohoAddressText(...values) {
+  return values.flatMap(extractAddressParts).filter(Boolean).join(', ');
+}
+
+function zohoAddressSearchText(...values) {
+  return zohoAddressText(...values).toLowerCase();
+}
+
 function zohoRecipientText(message) {
-  return [
+  return zohoAddressSearchText(
     message.toAddress,
     message.ccAddress,
     message.bccAddress,
-    message.recipientAddress
-  ].filter(Boolean).join(' ').toLowerCase();
+    message.recipientAddress,
+    message.deliveredTo,
+    message.originalRecipient,
+    message.to,
+    message.cc,
+    message.bcc,
+    message.recipients
+  );
 }
 
 function newestMessageTime(message) {
@@ -121,12 +154,13 @@ function findMailFolder(folders, folder) {
 
 function zohoAccountRecipientText(account) {
   const aliases = Array.isArray(account?.sendMailDetails) ? account.sendMailDetails : [];
-  return [
+  return zohoAddressSearchText(
     account?.primaryEmailAddress,
     account?.emailAddress,
     account?.accountDisplayName,
+    account?.mailboxAddress,
     ...aliases.map(a => a.fromAddress)
-  ].filter(Boolean).join(' ').toLowerCase();
+  );
 }
 
 async function getZohoMailAccounts(cfg) {
@@ -135,6 +169,18 @@ async function getZohoMailAccounts(cfg) {
     const accounts = Array.isArray(data.data) ? data.data.filter(a => a?.accountId) : [];
     if (accounts.length) return accounts;
   } catch {}
+
+  if (Array.isArray(cfg.accounts) && cfg.accounts.some(a => a?.accountId)) {
+    return cfg.accounts.filter(a => a?.accountId).map(a => ({
+      accountId: a.accountId,
+      primaryEmailAddress: a.primaryEmailAddress || a.email,
+      emailAddress: a.email,
+      accountDisplayName: a.name,
+      sendMailDetails: Array.isArray(a.aliases)
+        ? a.aliases.map(alias => ({ fromAddress: alias.address, displayName: alias.name }))
+        : []
+    }));
+  }
 
   return [{
     accountId: cfg.accountId,
@@ -350,10 +396,12 @@ app.http('email-inbox', {
           email: cfg.email,
           recipient: recipientFilter,
           scannedCount: allMsgs.length,
+          accountsScanned: accountsToScan.length,
           unreadCount: folder === 'inbox' ? msgs.filter(m => !m.isRead).length : 0,
           messages: msgs.slice(0, recipientFilter ? 80 : 60).map(m => ({
-            id: m.messageId, subject: m.subject || '(no subject)',
-            from: m.fromAddress || '', to: m.toAddress || '',
+            id: m.messageId || m.mailId || m.id, subject: m.subject || '(no subject)',
+            from: zohoAddressText(m.fromAddress, m.from) || '',
+            to: zohoAddressText(m.toAddress, m.to, m.recipientAddress, m.recipients) || '',
             date: m.receivedTime ? new Date(parseInt(m.receivedTime)).toISOString() : '',
             unread: !m.isRead,
             folderId: m.folderId || '',
