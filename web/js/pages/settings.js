@@ -80,9 +80,13 @@ function renderSettingsDetail(svc) {
       ${fieldInput(svc.key, f)}
     `).join('')}
     ${oauthRedirectHint(svc.key)}
+    ${OAUTH_SERVICES.includes(svc.key) ? `<div id="cfg-oauth-result-${svc.key}" style="display:none;margin:0 0 10px"></div>` : ''}
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
       <button class="btn bsm" onclick="saveServiceConfig('${svc.key}')">Save</button>
-      ${OAUTH_SERVICES.includes(svc.key) ? `<button class="btn bsm bo" onclick="connectServiceOAuth('${svc.key}')">Connect / authorise</button>` : ''}
+      ${OAUTH_SERVICES.includes(svc.key) ? `
+        <button class="btn bsm bo" id="cfg-connect-${svc.key}" onclick="connectServiceOAuth('${svc.key}')"><i class="ti ti-plug-connected" style="font-size:11px"></i> Connect / authorise</button>
+        <button class="btn bsm bdng" id="cfg-disconnect-${svc.key}" style="display:none" onclick="disconnectServiceOAuth('${svc.key}')"><i class="ti ti-plug-off" style="font-size:11px"></i> Disconnect</button>
+      ` : ''}
     </div>
   </div>`;
 }
@@ -162,6 +166,41 @@ async function copyOAuthRedirect(key) {
   }
 }
 
+async function openExternalUrl(url) {
+  if (!url) return;
+  if (window.techsinno && typeof window.techsinno.openUrl === 'function') {
+    await window.techsinno.openUrl(url);
+    return;
+  }
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+async function copyTextToClipboard(text, label) {
+  try {
+    await navigator.clipboard.writeText(text);
+    ntf(`${label} copied`);
+  } catch {
+    ntf(text);
+  }
+}
+
+function renderOAuthResult(key, data) {
+  const el = document.getElementById(`cfg-oauth-result-${key}`);
+  if (!el || !data?.url) return;
+  el.style.display = 'block';
+  el.innerHTML = `<div class="ri" style="align-items:flex-start;margin:2px 0 0">
+    <i class="ti ti-external-link" style="color:var(--brand-mid);font-size:13px;flex-shrink:0;margin-top:2px"></i>
+    <div style="min-width:0;flex:1">
+      <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;letter-spacing:.08em;text-transform:uppercase">Authorisation link</div>
+      <code style="display:block;overflow:auto;margin-top:4px;color:var(--text2);font-size:10px;max-height:52px">${escHtml(data.url)}</code>
+    </div>
+    <div style="display:flex;gap:5px;flex-shrink:0">
+      <button class="btn bsm bo" type="button" onclick="copyTextToClipboard(${jsArg(data.url)}, 'Auth link')">Copy</button>
+      <button class="btn bsm bo" type="button" onclick="openExternalUrl(${jsArg(data.url)})">Open</button>
+    </div>
+  </div>`;
+}
+
 function collectServiceConfig(key) {
   const svc = SERVICES.find(s => s.key === key);
   const body = {};
@@ -205,6 +244,7 @@ async function connectServiceOAuth(key) {
       const redirectEl = document.getElementById(`cfg-redirect-${key}`);
       if (redirectEl) redirectEl.textContent = data.redirectUri;
     }
+    renderOAuthResult(key, data);
     const popup = window.open(data.url, `${key}_auth`, 'width=640,height=760,scrollbars=yes');
     const expectedType = key === 'zoho_books' ? 'zoho-books-auth' : 'email-auth';
     window.addEventListener('message', function handler(e) {
@@ -219,7 +259,10 @@ async function connectServiceOAuth(key) {
         }
       }
     });
-    if (!popup) ntf('Popup blocked. Allow popups for this dashboard.');
+    if (!popup) {
+      ntf('Popup blocked. Opening in browser.');
+      await openExternalUrl(data.url);
+    }
   } catch {
     ntf('Failed to initiate connection');
   }
@@ -236,6 +279,7 @@ async function loadServiceConfig(key) {
     const cfg = data && data.config;
     CONFIG_CACHE[key] = cfg || {};
     setConfigBadge(key, cfg);
+    updateOAuthButtons(key, cfg);
     if (key.startsWith('zoho') && typeof updateZohoHeaderStatus === 'function') updateZohoHeaderStatus();
 
     const svc = SERVICES.find(s => s.key === key);
@@ -252,6 +296,17 @@ async function loadServiceConfig(key) {
       badge.style.color = '#f85149';
     }
   }
+}
+
+function updateOAuthButtons(key, cfg) {
+  if (!OAUTH_SERVICES.includes(key)) return;
+  const connectBtn = document.getElementById(`cfg-connect-${key}`);
+  const disconnectBtn = document.getElementById(`cfg-disconnect-${key}`);
+  const connected = !!(cfg && cfg.connected);
+  if (connectBtn) connectBtn.innerHTML = connected || cfg?.reconnectRequired
+    ? '<i class="ti ti-refresh" style="font-size:11px"></i> Reconnect / authorise'
+    : '<i class="ti ti-plug-connected" style="font-size:11px"></i> Connect / authorise';
+  if (disconnectBtn) disconnectBtn.style.display = connected || cfg?.reconnectRequired ? '' : 'none';
 }
 
 function setConfigBadge(key, cfg) {
@@ -318,5 +373,23 @@ async function saveServiceConfig(key) {
     }
   } catch {
     ntf('Failed to save config');
+  }
+}
+
+async function disconnectServiceOAuth(key) {
+  if (!confirm('Disconnect this service so it can be reconnected?')) return;
+  try {
+    const data = key === 'zoho_books'
+      ? await apiPut('/config/zoho_books', { accessToken: null, refreshToken: null, tokenExpiry: null, connected: false })
+      : await apiPost('/email/disconnect/' + key);
+    if (data && data.error) {
+      ntf(data.error);
+      return;
+    }
+    ntf('Disconnected');
+    await loadServiceConfig(key);
+    if (key.startsWith('zoho') && typeof updateZohoHeaderStatus === 'function') updateZohoHeaderStatus();
+  } catch {
+    ntf('Failed to disconnect');
   }
 }

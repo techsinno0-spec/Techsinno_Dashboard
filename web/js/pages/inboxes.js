@@ -208,6 +208,7 @@ async function loadEmailAccounts() {
           <div style="display:flex;gap:6px">
             <button class="btn bsm bo" onclick="render_inboxes()"><i class="ti ti-refresh" style="font-size:11px"></i> Refresh</button>
             ${connected ? `<button class="btn bsm" onclick="openComposeModal('${p.key}')"><i class="ti ti-send" style="font-size:11px"></i> Compose</button>` : ''}
+            ${connected ? `<button class="btn bsm bdng" onclick="disconnectEmail('${p.key}')"><i class="ti ti-plug-off" style="font-size:11px"></i> Disconnect</button>` : ''}
             <button class="btn bsm bo" onclick="navigateTo('settings')"><i class="ti ti-settings" style="font-size:11px"></i></button>
           </div>
         </div>
@@ -282,6 +283,10 @@ async function connectEmail(provider) {
         }
       }
     });
+    if (!popup && typeof openExternalUrl === 'function') {
+      ntf('Popup blocked. Opening in browser.');
+      await openExternalUrl(data.url);
+    }
   } catch { ntf('Failed to initiate connection'); }
 }
 
