@@ -348,7 +348,8 @@ async function loadInbox(provider, folder, recipientKey) {
     const unread = data.unreadCount || 0;
     const scanNote = provider === 'zoho_mail' && data.scannedCount
       ? `<div style="font-size:10px;color:var(--text3);padding:6px 12px;border-bottom:1px solid var(--border);font-family:'DM Mono',monospace">
-          Showing ${_currentMessages.length} message${_currentMessages.length === 1 ? '' : 's'} from latest ${data.scannedCount} Zoho message${data.scannedCount === 1 ? '' : 's'} scanned${recipientAddress ? ` for ${escHtml(recipientAddress)}` : ''}.
+          Showing ${_currentMessages.length} message${_currentMessages.length === 1 ? '' : 's'} from latest ${data.scannedCount} Zoho message${data.scannedCount === 1 ? '' : 's'} scanned${recipientAddress ? ` for ${escHtml(recipientAddress)}` : ''}${data.detailScannedCount ? `; checked ${data.detailScannedCount} message detail${data.detailScannedCount === 1 ? '' : 's'}` : ''}.
+          ${data.warning ? `<div style="margin-top:4px;color:#f0b429;white-space:normal;line-height:1.45">${escHtml(data.warning)}</div>` : ''}
         </div>`
       : '';
 

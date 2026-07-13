@@ -13,6 +13,7 @@ const OUTLOOK_MESSAGE_LIMIT = 50;
 const ZOHO_PAGE_SIZE = 50;
 const ZOHO_ALL_SCAN_LIMIT = 250;
 const ZOHO_ALIAS_SCAN_LIMIT = 500;
+const ZOHO_ALIAS_DETAIL_SCAN_LIMIT = 180;
 
 function mailJsonResponse(body, status = 200) {
   const response = jsonResponse(body, status);
@@ -93,7 +94,9 @@ function extractAddressParts(value) {
       value.name,
       value.displayName,
       value.fromAddress,
-      value.toAddress
+      value.toAddress,
+      value.value,
+      value.headerValue
     ].flatMap(extractAddressParts);
   }
   return [];
@@ -107,6 +110,23 @@ function zohoAddressSearchText(...values) {
   return zohoAddressText(...values).toLowerCase();
 }
 
+function zohoNamedHeaderAddressText(headers) {
+  const wanted = new Set(['to', 'cc', 'bcc', 'delivered-to', 'x-original-to', 'envelope-to']);
+  const list = Array.isArray(headers) ? headers : [];
+  return list
+    .filter(h => wanted.has(String(h?.name || h?.key || '').toLowerCase()))
+    .map(h => h.value || h.headerValue || '')
+    .filter(Boolean)
+    .join(', ');
+}
+
+function zohoRawHeaderAddressText(...values) {
+  return values
+    .map(value => String(value || '').match(/^(to|cc|bcc|delivered-to|x-original-to|envelope-to):[^\r\n]+/gim) || [])
+    .flat()
+    .join('\n');
+}
+
 function zohoRecipientText(message) {
   return zohoAddressSearchText(
     message.toAddress,
@@ -118,8 +138,14 @@ function zohoRecipientText(message) {
     message.to,
     message.cc,
     message.bcc,
-    message.recipients
+    message.recipients,
+    zohoNamedHeaderAddressText(message.headers || message.header || message.messageHeaders),
+    zohoRawHeaderAddressText(message.raw, message.rawContent, message.headerContent, message.content, message.body)
   );
+}
+
+function zohoMessageId(message) {
+  return message?.messageId || message?.mailId || message?.id || '';
 }
 
 function newestMessageTime(message) {
@@ -214,7 +240,7 @@ async function fetchZohoMessageSource(cfg, path, baseParams, folderId, maxToScan
 
     const before = seen.size;
     pageMessages.forEach(message => {
-      const id = message.messageId || message.mailId || message.id;
+      const id = zohoMessageId(message);
       if (!id || seen.has(id)) return;
       seen.add(id);
       messages.push({ ...message, folderId: message.folderId || folderId });
@@ -243,7 +269,7 @@ async function fetchZohoMessages(cfg, accountId, folderId, maxToScan) {
     try {
       const sourceMessages = await fetchZohoMessageSource(cfg, source.path, source.params, folderId, maxToScan);
       sourceMessages.forEach(message => {
-        const id = message.messageId || message.mailId || message.id;
+        const id = zohoMessageId(message);
         if (!id || seen.has(id)) return;
         seen.add(id);
         messages.push(message);
@@ -255,6 +281,80 @@ async function fetchZohoMessages(cfg, accountId, folderId, maxToScan) {
 
   if (!messages.length && sourceError) throw sourceError;
   return messages.sort(newestFirst).slice(0, maxToScan);
+}
+
+async function fetchZohoMessageDetail(cfg, accountId, folderId, messageId) {
+  const paths = [];
+  if (folderId) {
+    paths.push(
+      `/accounts/${accountId}/folders/${folderId}/messages/${messageId}/content`,
+      `/accounts/${accountId}/folders/${folderId}/messages/${messageId}`
+    );
+  }
+  paths.push(
+    `/accounts/${accountId}/messages/${messageId}/content`,
+    `/accounts/${accountId}/messages/${messageId}`
+  );
+
+  const tried = new Set();
+  for (const path of paths) {
+    if (tried.has(path)) continue;
+    tried.add(path);
+    try {
+      const data = await zohoGet(cfg, path);
+      return data.data || data;
+    } catch {}
+  }
+  return null;
+}
+
+async function filterZohoRecipientMessages(cfg, allMsgs, recipientFilter) {
+  if (!recipientFilter) {
+    return { messages: allMsgs, metadataMatchedCount: allMsgs.length, detailScannedCount: 0, detailMatchedCount: 0 };
+  }
+
+  const metadataMatches = [];
+  const detailCandidates = [];
+
+  allMsgs.forEach(message => {
+    if (zohoRecipientText(message).includes(recipientFilter)) metadataMatches.push(message);
+    else detailCandidates.push(message);
+  });
+
+  const detailScan = detailCandidates.slice(0, ZOHO_ALIAS_DETAIL_SCAN_LIMIT);
+  const detailMatches = (await mapLimit(detailScan, 6, async message => {
+    const id = zohoMessageId(message);
+    if (!id) return null;
+    const detail = await fetchZohoMessageDetail(cfg, message.accountId || cfg.accountId, message.folderId || '', id);
+    if (!detail) return null;
+    const detailText = zohoRecipientText(detail);
+    if (!detailText.includes(recipientFilter)) return null;
+    return {
+      ...message,
+      toAddress: message.toAddress || detail.toAddress || detail.to,
+      ccAddress: message.ccAddress || detail.ccAddress || detail.cc,
+      bccAddress: message.bccAddress || detail.bccAddress || detail.bcc,
+      recipientAddress: message.recipientAddress || detail.recipientAddress,
+      recipients: message.recipients || detail.recipients
+    };
+  })).filter(Boolean);
+
+  const seen = new Set();
+  const messages = [...metadataMatches, ...detailMatches]
+    .filter(message => {
+      const key = `${message.accountId || ''}:${message.folderId || ''}:${zohoMessageId(message)}`;
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort(newestFirst);
+
+  return {
+    messages,
+    metadataMatchedCount: metadataMatches.length,
+    detailScannedCount: detailScan.length,
+    detailMatchedCount: detailMatches.length
+  };
 }
 
 app.http('email-inbox', {
@@ -384,12 +484,12 @@ app.http('email-inbox', {
 
         if (!allMsgs.length && accountError) throw accountError;
         allMsgs.sort(newestFirst);
-        const msgs = recipientFilter
-          ? allMsgs.filter(m => {
-              const recipientText = zohoRecipientText(m);
-              return !recipientText || recipientText.includes(recipientFilter);
-            })
-          : allMsgs;
+        const filterResult = await filterZohoRecipientMessages(cfg, allMsgs, recipientFilter);
+        const msgs = filterResult.messages;
+        const recipientKnownToZoho = recipientFilter
+          ? accounts.some(a => zohoAccountRecipientText(a).includes(recipientFilter)) ||
+            zohoAddressSearchText(...(Array.isArray(cfg.aliases) ? cfg.aliases.map(a => a.address) : [])).includes(recipientFilter)
+          : true;
 
         return mailJsonResponse({
           success: true,
@@ -397,9 +497,15 @@ app.http('email-inbox', {
           recipient: recipientFilter,
           scannedCount: allMsgs.length,
           accountsScanned: accountsToScan.length,
+          metadataMatchedCount: filterResult.metadataMatchedCount,
+          detailScannedCount: filterResult.detailScannedCount,
+          detailMatchedCount: filterResult.detailMatchedCount,
+          warning: recipientFilter && !msgs.length
+            ? `${recipientFilter} did not appear in Zoho recipient metadata after scanning ${allMsgs.length} messages and checking ${filterResult.detailScannedCount} message details.${recipientKnownToZoho ? '' : ' Zoho did not return this address as an API-visible account/alias for the connected user.'}`
+            : undefined,
           unreadCount: folder === 'inbox' ? msgs.filter(m => !m.isRead).length : 0,
           messages: msgs.slice(0, recipientFilter ? 80 : 60).map(m => ({
-            id: m.messageId || m.mailId || m.id, subject: m.subject || '(no subject)',
+            id: zohoMessageId(m), subject: m.subject || '(no subject)',
             from: zohoAddressText(m.fromAddress, m.from) || '',
             to: zohoAddressText(m.toAddress, m.to, m.recipientAddress, m.recipients) || '',
             date: m.receivedTime ? new Date(parseInt(m.receivedTime)).toISOString() : '',
