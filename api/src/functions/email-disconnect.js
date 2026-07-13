@@ -17,7 +17,14 @@ app.http('email-disconnect', {
     const cfg = await getEmailConfig(provider);
     if (!cfg) return jsonResponse({ success: true });
 
-    const updates = { accessToken: null, refreshToken: null, tokenExpiry: null, email: null };
+    const updates = {
+      accessToken: null,
+      refreshToken: null,
+      tokenExpiry: null,
+      email: null,
+      reconnectRequired: false,
+      lastAuthError: null
+    };
     if (provider === 'zoho_mail') {
       updates.accountId = null;
       updates.aliases = null;

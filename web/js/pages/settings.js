@@ -30,6 +30,7 @@ const FIELD_LABELS = {
 const CONFIG_CACHE = {};
 const OAUTH_SERVICES = ['zoho_books', 'zoho_mail', 'gmail', 'outlook'];
 const PUBLIC_DASHBOARD_BASE = 'https://nice-bay-095935e10.7.azurestaticapps.net';
+const OAUTH_POLLERS = {};
 
 async function render_settings() {
   if (!isOwner()) return;
@@ -146,11 +147,17 @@ function oauthRedirectHint(key) {
   if (!OAUTH_SERVICES.includes(key)) return '';
   const uri = oauthRedirectUri(key);
   const provider = key.startsWith('zoho') ? 'Zoho API Console' : (key === 'gmail' ? 'Google Cloud Console' : 'Microsoft Azure app registration');
+  const mismatchNote = key === 'gmail'
+    ? `<div style="font-size:10px;color:#f0b429;line-height:1.45;margin-top:6px">
+        Google error 400 redirect_uri_mismatch means this exact URI is missing under OAuth Client > Authorized redirect URIs.
+      </div>`
+    : '';
   return `<div class="ri" style="align-items:flex-start;margin:2px 0 10px">
     <i class="ti ti-link" style="color:var(--brand-mid);font-size:13px;flex-shrink:0;margin-top:2px"></i>
     <div style="min-width:0;flex:1">
       <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;letter-spacing:.08em;text-transform:uppercase">Redirect URI for ${provider}</div>
       <code id="cfg-redirect-${key}" style="display:block;overflow:auto;margin-top:4px;color:var(--brand-mid);font-size:11px">${uri}</code>
+      ${mismatchNote}
     </div>
     <button class="btn bsm bo" type="button" onclick="copyOAuthRedirect('${key}')">Copy</button>
   </div>`;
@@ -187,18 +194,52 @@ async function copyTextToClipboard(text, label) {
 function renderOAuthResult(key, data) {
   const el = document.getElementById(`cfg-oauth-result-${key}`);
   if (!el || !data?.url) return;
+  const mismatchNote = key === 'gmail' && data.redirectUri
+    ? `<div style="font-size:10px;color:#f0b429;line-height:1.45;margin-top:6px">
+        If Google blocks sign-in, add <code style="color:#f0b429">${escHtml(data.redirectUri)}</code> to the OAuth client's Authorized redirect URIs.
+      </div>`
+    : '';
   el.style.display = 'block';
   el.innerHTML = `<div class="ri" style="align-items:flex-start;margin:2px 0 0">
     <i class="ti ti-external-link" style="color:var(--brand-mid);font-size:13px;flex-shrink:0;margin-top:2px"></i>
     <div style="min-width:0;flex:1">
       <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;letter-spacing:.08em;text-transform:uppercase">Authorisation link</div>
       <code style="display:block;overflow:auto;margin-top:4px;color:var(--text2);font-size:10px;max-height:52px">${escHtml(data.url)}</code>
+      ${mismatchNote}
     </div>
     <div style="display:flex;gap:5px;flex-shrink:0">
       <button class="btn bsm bo" type="button" onclick="copyTextToClipboard(${jsArg(data.url)}, 'Auth link')">Copy</button>
       <button class="btn bsm bo" type="button" onclick="openExternalUrl(${jsArg(data.url)})">Open</button>
     </div>
   </div>`;
+}
+
+async function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function pollOAuthConnection(key) {
+  if (OAUTH_POLLERS[key]) return;
+  OAUTH_POLLERS[key] = true;
+  const svc = SERVICES.find(s => s.key === key);
+  const deadline = Date.now() + 120000;
+  try {
+    while (Date.now() < deadline) {
+      await wait(4000);
+      const data = await apiGet(`/config/${key}`);
+      const cfg = data && data.config;
+      CONFIG_CACHE[key] = cfg || {};
+      setConfigBadge(key, cfg);
+      updateOAuthButtons(key, cfg);
+      if (cfg && cfg.connected && !cfg.reconnectRequired) {
+        ntf(`${svc?.label || 'Service'} connected`);
+        if (key.startsWith('zoho') && typeof updateZohoHeaderStatus === 'function') updateZohoHeaderStatus();
+        return;
+      }
+    }
+  } finally {
+    OAUTH_POLLERS[key] = false;
+  }
 }
 
 function collectServiceConfig(key) {
@@ -245,6 +286,7 @@ async function connectServiceOAuth(key) {
       if (redirectEl) redirectEl.textContent = data.redirectUri;
     }
     renderOAuthResult(key, data);
+    pollOAuthConnection(key);
     const popup = window.open(data.url, `${key}_auth`, 'width=640,height=760,scrollbars=yes');
     const expectedType = key === 'zoho_books' ? 'zoho-books-auth' : 'email-auth';
     window.addEventListener('message', function handler(e) {

@@ -80,7 +80,10 @@ app.http('email-callback', {
           accessToken: access_token,
           refreshToken: refresh_token || cfg?.refreshToken,
           tokenExpiry: Date.now() + expires_in * 1000,
-          email, connectedBy: decoded.sub
+          email,
+          connectedBy: decoded.sub,
+          reconnectRequired: false,
+          lastAuthError: null
         });
 
         return html('Gmail connected successfully!', true);
