@@ -96,14 +96,32 @@ async function ensureMsToken(config) {
     refresh_token: config.refreshToken,
     scope: MS_SCOPES
   });
-  const r = await axios.post(MS_TOKEN_URL, p.toString(), {
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-  });
+  let r;
+  try {
+    r = await axios.post(MS_TOKEN_URL, p.toString(), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+  } catch (err) {
+    const tokenError = err.response?.data?.error;
+    if (['invalid_grant', 'interaction_required', 'invalid_client'].includes(tokenError)) {
+      await saveEmailConfig('outlook', {
+        accessToken: null,
+        refreshToken: null,
+        tokenExpiry: 0,
+        reconnectRequired: true,
+        lastAuthError: 'Outlook authorization expired or was revoked. Reconnect Outlook.'
+      });
+      throw new Error('Outlook authorization expired or was revoked. Reconnect Outlook in Settings.');
+    }
+    throw err;
+  }
   const token = r.data.access_token;
   await saveEmailConfig('outlook', {
     accessToken: token,
     refreshToken: r.data.refresh_token || config.refreshToken,
-    tokenExpiry: Date.now() + r.data.expires_in * 1000
+    tokenExpiry: Date.now() + r.data.expires_in * 1000,
+    reconnectRequired: false,
+    lastAuthError: null
   });
   return token;
 }

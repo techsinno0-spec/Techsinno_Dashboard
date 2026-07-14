@@ -134,20 +134,13 @@ function refreshCurrentPageFromCloud() {
   const active = document.activeElement;
   if (active && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName)) return;
 
-  if (currentPage === 'inboxes' && typeof window.refresh_inboxes_from_cloud === 'function') {
-    window.refresh_inboxes_from_cloud();
+  const safeRefreshName = 'refresh_' + currentPage.replace(/-/g, '_') + '_from_cloud';
+  if (typeof window[safeRefreshName] === 'function') {
+    window[safeRefreshName]();
     return;
   }
 
-  const renderName = 'render_' + currentPage.replace(/-/g, '_');
-  if (typeof window[renderName] === 'function') {
-    window[renderName]();
-    return;
-  }
-  const legacyRenderName = 'render_' + currentPage;
-  if (typeof window[legacyRenderName] === 'function') {
-    window[legacyRenderName]();
-  }
+  // Automatic refresh must not rebuild active pages. Manual refresh buttons still call render_*.
 }
 
 async function initApp() {

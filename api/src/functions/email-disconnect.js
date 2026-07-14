@@ -22,6 +22,7 @@ app.http('email-disconnect', {
       refreshToken: null,
       tokenExpiry: null,
       email: null,
+      connected: false,
       reconnectRequired: false,
       lastAuthError: null
     };

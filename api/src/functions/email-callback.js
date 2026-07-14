@@ -118,7 +118,11 @@ app.http('email-callback', {
           accessToken: access_token,
           refreshToken: refresh_token || cfg?.refreshToken,
           tokenExpiry: Date.now() + expires_in * 1000,
-          email, connectedBy: decoded.sub
+          email,
+          connectedBy: decoded.sub,
+          connected: true,
+          reconnectRequired: false,
+          lastAuthError: null
         });
 
         return html('Outlook connected successfully!', true);

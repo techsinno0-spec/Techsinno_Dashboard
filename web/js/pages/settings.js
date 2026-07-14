@@ -147,10 +147,12 @@ function oauthRedirectHint(key) {
   if (!OAUTH_SERVICES.includes(key)) return '';
   const uri = oauthRedirectUri(key);
   const provider = key.startsWith('zoho') ? 'Zoho API Console' : (key === 'gmail' ? 'Google Cloud Console' : 'Microsoft Azure app registration');
-  const mismatchNote = key === 'gmail'
-    ? `<div style="font-size:10px;color:#f0b429;line-height:1.45;margin-top:6px">
-        Google error 400 redirect_uri_mismatch means this exact URI is missing under OAuth Client > Authorized redirect URIs.
-      </div>`
+  const mismatchNotes = {
+    gmail: 'Google error 400 redirect_uri_mismatch means this exact URI is missing under OAuth Client > Authorized redirect URIs.',
+    outlook: 'Microsoft AADSTS50011 means this exact URI is missing under App registration > Authentication > Web redirect URIs.'
+  };
+  const mismatchNote = mismatchNotes[key]
+    ? `<div style="font-size:10px;color:#f0b429;line-height:1.45;margin-top:6px">${mismatchNotes[key]}</div>`
     : '';
   return `<div class="ri" style="align-items:flex-start;margin:2px 0 10px">
     <i class="ti ti-link" style="color:var(--brand-mid);font-size:13px;flex-shrink:0;margin-top:2px"></i>
@@ -194,9 +196,13 @@ async function copyTextToClipboard(text, label) {
 function renderOAuthResult(key, data) {
   const el = document.getElementById(`cfg-oauth-result-${key}`);
   if (!el || !data?.url) return;
-  const mismatchNote = key === 'gmail' && data.redirectUri
+  const providerBlockMessage = {
+    gmail: 'If Google blocks sign-in, add this URI to the OAuth client Authorized redirect URIs.',
+    outlook: 'If Microsoft blocks sign-in with AADSTS50011, add this URI under App registration > Authentication > Web redirect URIs.'
+  }[key];
+  const mismatchNote = providerBlockMessage && data.redirectUri
     ? `<div style="font-size:10px;color:#f0b429;line-height:1.45;margin-top:6px">
-        If Google blocks sign-in, add <code style="color:#f0b429">${escHtml(data.redirectUri)}</code> to the OAuth client's Authorized redirect URIs.
+        ${providerBlockMessage} <code style="color:#f0b429">${escHtml(data.redirectUri)}</code>
       </div>`
     : '';
   el.style.display = 'block';
