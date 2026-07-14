@@ -4,17 +4,20 @@
   },
   "navigationFallback": {
     "rewrite": "/index.html",
-    "exclude": ["/img/*", "/css/*", "/js/*", "*.{css,js,png,jpg,jpeg,gif,svg,ico,json,webp}"]
+    "exclude": ["/img/*", "/css/*", "/js/*", "/vendor/*", "*.{css,js,png,jpg,jpeg,gif,svg,ico,json,webp,woff,woff2,ttf}"]
   },
   "globalHeaders": {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "SAMEORIGIN",
-    "Content-Security-Policy": "default-src 'self'; img-src 'self' data: https:; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net;"
+    "Content-Security-Policy": "default-src 'self'; img-src 'self' data: https:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;"
   },
   "mimeTypes": {
     ".json": "application/json",
     ".jpg": "image/jpeg",
     ".jpeg": "image/jpeg",
-    ".png": "image/png"
+    ".png": "image/png",
+    ".woff2": "font/woff2",
+    ".woff": "font/woff",
+    ".ttf": "font/ttf"
   }
 }
