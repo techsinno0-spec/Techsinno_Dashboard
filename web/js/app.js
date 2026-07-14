@@ -134,6 +134,11 @@ function refreshCurrentPageFromCloud() {
   const active = document.activeElement;
   if (active && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName)) return;
 
+  if (currentPage === 'inboxes' && typeof window.refresh_inboxes_from_cloud === 'function') {
+    window.refresh_inboxes_from_cloud();
+    return;
+  }
+
   const renderName = 'render_' + currentPage.replace(/-/g, '_');
   if (typeof window[renderName] === 'function') {
     window[renderName]();

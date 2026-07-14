@@ -177,6 +177,26 @@ async function render_inboxes() {
   await loadEmailAccounts();
 }
 
+function isEmailReadPaneOpen() {
+  const readEl = document.getElementById('emailReadPane');
+  return !!readEl && readEl.style.display !== 'none' && readEl.innerHTML.trim() !== '';
+}
+
+function refresh_inboxes_from_cloud() {
+  if (isEmailReadPaneOpen()) return;
+
+  if (_activeProvider && _emailAccounts?.[_activeProvider]?.connected) {
+    loadInbox(
+      _activeProvider,
+      _activeFolder || 'inbox',
+      _activeProvider === 'zoho_mail' ? _activeZohoRecipient : 'all'
+    );
+    return;
+  }
+
+  loadEmailAccounts();
+}
+
 async function loadEmailAccounts() {
   const el = document.getElementById('page-inboxes');
   try {
