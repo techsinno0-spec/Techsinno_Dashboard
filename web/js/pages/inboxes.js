@@ -346,9 +346,14 @@ async function loadInbox(provider, folder, recipientKey) {
 
     _currentMessages = data.messages || [];
     const unread = data.unreadCount || 0;
-    const scanNote = provider === 'zoho_mail' && data.scannedCount
+    const folderNames = Array.isArray(data.folderNamesScanned) ? data.folderNamesScanned : [];
+    const folderListText = folderNames.length
+      ? `Folders: ${folderNames.slice(0, 8).join(', ')}${folderNames.length > 8 ? ` +${folderNames.length - 8} more` : ''}`
+      : '';
+    const scanNote = provider === 'zoho_mail' && (Number.isFinite(Number(data.scannedCount)) || data.warning || data.foldersScanned)
       ? `<div style="font-size:10px;color:var(--text3);padding:6px 12px;border-bottom:1px solid var(--border);font-family:'DM Mono',monospace">
-          Showing ${_currentMessages.length} message${_currentMessages.length === 1 ? '' : 's'} from latest ${data.scannedCount} Zoho message${data.scannedCount === 1 ? '' : 's'} scanned${recipientAddress ? ` for ${escHtml(recipientAddress)}` : ''}${data.detailScannedCount ? `; checked ${data.detailScannedCount} message detail${data.detailScannedCount === 1 ? '' : 's'}` : ''}.
+          Showing ${_currentMessages.length} message${_currentMessages.length === 1 ? '' : 's'} from latest ${data.scannedCount} Zoho message${data.scannedCount === 1 ? '' : 's'} scanned${data.foldersScanned ? ` across ${data.foldersScanned} folder${data.foldersScanned === 1 ? '' : 's'}` : ''}${recipientAddress ? ` for ${escHtml(recipientAddress)}` : ''}${data.detailScannedCount ? `; checked ${data.detailScannedCount} message detail${data.detailScannedCount === 1 ? '' : 's'}` : ''}.
+          ${folderListText ? `<div style="margin-top:3px;white-space:normal;line-height:1.35">${escHtml(folderListText)}</div>` : ''}
           ${data.warning ? `<div style="margin-top:4px;color:#f0b429;white-space:normal;line-height:1.45">${escHtml(data.warning)}</div>` : ''}
         </div>`
       : '';

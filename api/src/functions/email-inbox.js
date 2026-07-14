@@ -14,6 +14,7 @@ const ZOHO_PAGE_SIZE = 50;
 const ZOHO_ALL_SCAN_LIMIT = 250;
 const ZOHO_ALIAS_SCAN_LIMIT = 500;
 const ZOHO_ALIAS_DETAIL_SCAN_LIMIT = 180;
+const ZOHO_ALIAS_FOLDER_SCAN_LIMIT = 18;
 
 function mailJsonResponse(body, status = 200) {
   const response = jsonResponse(body, status);
@@ -167,15 +168,98 @@ function newestFirst(a, b) {
   return newestMessageTime(b) - newestMessageTime(a);
 }
 
+function zohoFolderList(folders) {
+  return Array.isArray(folders?.data) ? folders.data.filter(f => f?.folderId || f?.folderName || f?.path) : [];
+}
+
+function normalizeZohoFolderValue(value) {
+  return String(value || '').toLowerCase().replace(/^[\\/]+|[\\/]+$/g, '').trim();
+}
+
+function zohoFolderValues(folder) {
+  return [folder?.folderName, folder?.path, folder?.folderType]
+    .map(normalizeZohoFolderValue)
+    .filter(Boolean);
+}
+
+function zohoFolderLabel(folder) {
+  return String(folder?.folderName || folder?.path || folder?.folderType || folder?.folderId || 'All mail');
+}
+
+function zohoFolderText(folder) {
+  return zohoFolderValues(folder).join(' ');
+}
+
+function zohoFolderMatchesAny(folder, wanted) {
+  return zohoFolderValues(folder).some(value => (
+    wanted.includes(value) ||
+    value.split(/[\\/]/).some(part => wanted.includes(part))
+  ));
+}
+
 function findMailFolder(folders, folder) {
-  const list = Array.isArray(folders?.data) ? folders.data : [];
+  const list = zohoFolderList(folders);
   const wanted = folder === 'sent' ? ['sent', 'sent items', 'sent mail'] : ['inbox'];
-  return list.find(f => {
-    const name = String(f.folderName || '').toLowerCase();
-    const path = String(f.path || '').toLowerCase();
-    const type = String(f.folderType || '').toLowerCase();
-    return wanted.includes(name) || wanted.includes(path) || wanted.includes(type);
-  });
+  return list.find(f => zohoFolderMatchesAny(f, wanted));
+}
+
+function isZohoAliasCandidateFolder(folder) {
+  const excluded = ['sent', 'sent items', 'sent mail', 'draft', 'drafts', 'trash', 'bin', 'spam', 'junk', 'outbox', 'template', 'templates'];
+  return !zohoFolderValues(folder).some(value => (
+    excluded.includes(value) ||
+    value.split(/[\\/]/).some(part => excluded.includes(part))
+  ));
+}
+
+function selectZohoFolders(folders, folder, recipientFilter) {
+  const list = zohoFolderList(folders);
+  const selected = [];
+  const seen = new Set();
+  const add = (target) => {
+    if (!target) return;
+    const key = String(target.folderId || zohoFolderLabel(target)).toLowerCase();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    selected.push(target);
+  };
+
+  add(findMailFolder(folders, folder));
+  if (folder === 'sent' || !recipientFilter) return selected;
+
+  const localPart = recipientFilter.split('@')[0].toLowerCase();
+  list
+    .filter(f => localPart && zohoFolderText(f).includes(localPart))
+    .forEach(add);
+  list
+    .filter(isZohoAliasCandidateFolder)
+    .forEach(add);
+
+  return selected.slice(0, ZOHO_ALIAS_FOLDER_SCAN_LIMIT);
+}
+
+function sampleZohoRecipients(messages, limit = 6) {
+  const seen = new Set();
+  const samples = [];
+  for (const message of messages) {
+    const value = zohoAddressText(message.toAddress, message.to, message.recipientAddress, message.recipients).trim();
+    if (!value) continue;
+    const key = value.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    samples.push(value.length > 90 ? `${value.slice(0, 87)}...` : value);
+    if (samples.length >= limit) break;
+  }
+  return samples;
+}
+
+function zohoRecipientWarning(recipientFilter, allMsgs, filterResult, recipientKnownToZoho, folderNamesScanned, recipientSamples) {
+  const folders = folderNamesScanned.length
+    ? ` Folders scanned: ${folderNamesScanned.slice(0, 8).join(', ')}${folderNamesScanned.length > 8 ? ` +${folderNamesScanned.length - 8} more` : ''}.`
+    : '';
+  const samples = recipientSamples.length
+    ? ` Recent To values seen: ${recipientSamples.join(' | ')}.`
+    : '';
+  return `${recipientFilter} did not appear in Zoho recipient metadata after scanning ${allMsgs.length} messages and checking ${filterResult.detailScannedCount} message details.${folders}${samples}${recipientKnownToZoho ? '' : ' Zoho did not return this address as an API-visible account/alias for the connected user.'}`;
 }
 
 function zohoAccountRecipientText(account) {
@@ -466,23 +550,51 @@ app.http('email-inbox', {
         const accountsToScan = targetAccounts.length ? targetAccounts : accounts;
         const perAccountLimit = Math.max(ZOHO_PAGE_SIZE, Math.ceil(scanLimit / Math.max(1, accountsToScan.length)));
         const allMsgs = [];
+        const allSeen = new Set();
+        const folderNamesScanned = [];
+        const folderNameSeen = new Set();
         let accountError = null;
 
         for (const account of accountsToScan) {
-          let folderId;
+          let foldersToScan = [];
           try {
             const folders = await zohoGet(cfg, `/accounts/${account.accountId}/folders`);
-            const target = findMailFolder(folders, folder);
-            if (target) folderId = target.folderId;
+            foldersToScan = selectZohoFolders(folders, folder, recipientFilter);
           } catch {}
 
-          if (folder === 'sent' && !folderId) continue;
+          if (!foldersToScan.length && folder !== 'sent') {
+            foldersToScan = [{ folderId: '', folderName: 'All mail' }];
+          }
+          if (folder === 'sent' && !foldersToScan.length) continue;
 
-          try {
-            const accountMsgs = await fetchZohoMessages(cfg, account.accountId, folderId, perAccountLimit);
-            accountMsgs.forEach(m => allMsgs.push({ ...m, accountId: account.accountId, folderId: m.folderId || folderId || '' }));
-          } catch (err) {
-            accountError = accountError || err;
+          const perFolderLimit = Math.max(ZOHO_PAGE_SIZE, Math.ceil(perAccountLimit / Math.max(1, foldersToScan.length)));
+          for (const target of foldersToScan) {
+            const folderId = target.folderId || '';
+            const folderLabel = zohoFolderLabel(target);
+            const folderKey = `${account.accountId}:${folderId || folderLabel}`.toLowerCase();
+            if (!folderNameSeen.has(folderKey)) {
+              folderNameSeen.add(folderKey);
+              folderNamesScanned.push(folderLabel);
+            }
+
+            try {
+              const accountMsgs = await fetchZohoMessages(cfg, account.accountId, folderId, perFolderLimit);
+              accountMsgs.forEach(m => {
+                const id = zohoMessageId(m);
+                const msgFolderId = m.folderId || folderId || '';
+                const key = `${account.accountId}:${msgFolderId}:${id}`;
+                if (!id || allSeen.has(key)) return;
+                allSeen.add(key);
+                allMsgs.push({
+                  ...m,
+                  accountId: account.accountId,
+                  folderId: msgFolderId,
+                  folderName: m.folderName || folderLabel
+                });
+              });
+            } catch (err) {
+              accountError = accountError || err;
+            }
           }
         }
 
@@ -490,6 +602,7 @@ app.http('email-inbox', {
         allMsgs.sort(newestFirst);
         const filterResult = await filterZohoRecipientMessages(cfg, allMsgs, recipientFilter);
         const msgs = filterResult.messages;
+        const recipientSamples = recipientFilter ? sampleZohoRecipients(allMsgs) : [];
         const recipientKnownToZoho = recipientFilter
           ? accounts.some(a => zohoAccountRecipientText(a).includes(recipientFilter)) ||
             zohoAddressSearchText(...(Array.isArray(cfg.aliases) ? cfg.aliases.map(a => a.address) : [])).includes(recipientFilter)
@@ -501,11 +614,14 @@ app.http('email-inbox', {
           recipient: recipientFilter,
           scannedCount: allMsgs.length,
           accountsScanned: accountsToScan.length,
+          foldersScanned: folderNamesScanned.length,
+          folderNamesScanned,
+          recipientSamples,
           metadataMatchedCount: filterResult.metadataMatchedCount,
           detailScannedCount: filterResult.detailScannedCount,
           detailMatchedCount: filterResult.detailMatchedCount,
           warning: recipientFilter && !msgs.length
-            ? `${recipientFilter} did not appear in Zoho recipient metadata after scanning ${allMsgs.length} messages and checking ${filterResult.detailScannedCount} message details.${recipientKnownToZoho ? '' : ' Zoho did not return this address as an API-visible account/alias for the connected user.'}`
+            ? zohoRecipientWarning(recipientFilter, allMsgs, filterResult, recipientKnownToZoho, folderNamesScanned, recipientSamples)
             : undefined,
           unreadCount: folder === 'inbox' ? msgs.filter(m => !m.isRead).length : 0,
           messages: msgs.slice(0, recipientFilter ? 80 : 60).map(m => ({
