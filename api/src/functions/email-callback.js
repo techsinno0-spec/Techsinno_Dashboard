@@ -194,17 +194,35 @@ app.http('email-callback', {
                 primaryEmailAddress: a.primaryEmailAddress || a.emailAddress || '',
                 email: a.emailAddress || a.primaryEmailAddress || '',
                 name: a.accountDisplayName || a.displayName || a.primaryEmailAddress || '',
-                aliases: (a.sendMailDetails || []).map(s => ({
+                aliases: [
+                  ...(a.sendMailDetails || []).map(s => ({
+                    address: s.fromAddress,
+                    name: s.displayName || s.fromAddress,
+                    isDefault: !!(s.isDefault || s.isPrimary)
+                  })),
+                  ...(Array.isArray(a.emailAddress) ? a.emailAddress.map(e => ({
+                    address: e.mailId || e.emailAddress || e.address,
+                    name: e.mailId || e.emailAddress || e.address,
+                    isDefault: !!e.isPrimary
+                  })) : [])
+                ].filter(alias => alias.address)
+              }));
+              const sends = accounts.flatMap(a => [
+                ...(a.sendMailDetails || []).map(s => ({
                   address: s.fromAddress,
                   name: s.displayName || s.fromAddress,
                   isDefault: !!(s.isDefault || s.isPrimary)
-                })).filter(alias => alias.address)
-              }));
-              const sends = accounts.flatMap(a => a.sendMailDetails || []);
+                })),
+                ...(Array.isArray(a.emailAddress) ? a.emailAddress.map(e => ({
+                  address: e.mailId || e.emailAddress || e.address,
+                  name: e.mailId || e.emailAddress || e.address,
+                  isDefault: !!e.isPrimary
+                })) : [])
+              ]);
               updates.aliases = sends.map(s => ({
-                address: s.fromAddress,
-                name: s.displayName || s.fromAddress,
-                isDefault: !!(s.isDefault || s.isPrimary)
+                address: s.address,
+                name: s.name || s.address,
+                isDefault: !!s.isDefault
               })).filter(alias => alias.address);
               if (!updates.aliases.length && accounts.length) {
                 updates.aliases = accounts

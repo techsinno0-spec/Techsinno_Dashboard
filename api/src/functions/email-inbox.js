@@ -180,12 +180,15 @@ function findMailFolder(folders, folder) {
 
 function zohoAccountRecipientText(account) {
   const aliases = Array.isArray(account?.sendMailDetails) ? account.sendMailDetails : [];
+  const emailAddresses = Array.isArray(account?.emailAddress) ? account.emailAddress : [];
   return zohoAddressSearchText(
     account?.primaryEmailAddress,
     account?.emailAddress,
     account?.accountDisplayName,
     account?.mailboxAddress,
-    ...aliases.map(a => a.fromAddress)
+    account?.incomingUserName,
+    ...aliases.map(a => a.fromAddress),
+    ...emailAddresses.map(a => a.mailId || a.emailAddress || a.address)
   );
 }
 
@@ -224,7 +227,8 @@ async function fetchZohoMessageSource(cfg, path, baseParams, folderId, maxToScan
   for (let page = 0; page < Math.ceil(maxToScan / ZOHO_PAGE_SIZE); page++) {
     const params = {
       ...baseParams,
-      limit: ZOHO_PAGE_SIZE
+      limit: ZOHO_PAGE_SIZE,
+      includeto: true
     };
     if (page > 0) params.start = page * ZOHO_PAGE_SIZE + 1;
 
