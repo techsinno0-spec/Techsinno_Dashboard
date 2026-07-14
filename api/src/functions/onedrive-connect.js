@@ -31,7 +31,7 @@ app.http('onedrive-connect', {
       redirect_uri: redirectUri,
       scope: ONEDRIVE_SCOPES,
       response_mode: 'query',
-      prompt: 'select_account consent',
+      prompt: 'consent',
       state
     });
 
