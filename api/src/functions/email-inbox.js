@@ -14,7 +14,7 @@ const ZOHO_PAGE_SIZE = 50;
 const ZOHO_ALL_SCAN_LIMIT = 250;
 const ZOHO_ALIAS_SCAN_LIMIT = 500;
 const ZOHO_ALIAS_DETAIL_SCAN_LIMIT = 180;
-const ZOHO_ALIAS_FOLDER_SCAN_LIMIT = 18;
+const ZOHO_INBOX_FOLDER_SCAN_LIMIT = 18;
 
 function mailJsonResponse(body, status = 200) {
   const response = jsonResponse(body, status);
@@ -224,17 +224,19 @@ function selectZohoFolders(folders, folder, recipientFilter) {
   };
 
   add(findMailFolder(folders, folder));
-  if (folder === 'sent' || !recipientFilter) return selected;
+  if (folder === 'sent') return selected;
 
-  const localPart = recipientFilter.split('@')[0].toLowerCase();
-  list
-    .filter(f => localPart && zohoFolderText(f).includes(localPart))
-    .forEach(add);
+  const localPart = recipientFilter ? recipientFilter.split('@')[0].toLowerCase() : '';
+  if (localPart) {
+    list
+      .filter(f => zohoFolderText(f).includes(localPart))
+      .forEach(add);
+  }
   list
     .filter(isZohoAliasCandidateFolder)
     .forEach(add);
 
-  return selected.slice(0, ZOHO_ALIAS_FOLDER_SCAN_LIMIT);
+  return selected.slice(0, ZOHO_INBOX_FOLDER_SCAN_LIMIT);
 }
 
 function sampleZohoRecipients(messages, limit = 6) {
