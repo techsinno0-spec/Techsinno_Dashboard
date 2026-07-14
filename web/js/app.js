@@ -75,6 +75,31 @@ function setZohoHeaderPill(state, label) {
   pill.classList.add(state);
 }
 
+function setCloudHeaderPill(state, label) {
+  const pill = document.querySelector('.cloud-pill');
+  if (!pill) return;
+
+  pill.innerHTML = `<i class="ti ti-cloud"></i> ${escHtml(label)}`;
+  pill.classList.remove('connected', 'offline');
+  pill.classList.add(state);
+}
+
+async function updateCloudHeaderStatus() {
+  const pill = document.querySelector('.cloud-pill');
+  if (!pill) return;
+
+  try {
+    const data = await apiGet('/me');
+    if (data && !data.error && data.id) {
+      setCloudHeaderPill('connected', 'cloud: connected');
+      return;
+    }
+    setCloudHeaderPill('offline', 'cloud: offline');
+  } catch {
+    setCloudHeaderPill('offline', 'cloud: offline');
+  }
+}
+
 async function updateZohoHeaderStatus() {
   const pill = document.querySelector('.zoho-pill');
   if (!pill) return;
@@ -162,11 +187,13 @@ async function initApp() {
 
   if (isManager()) await loadUsers();
 
+  updateCloudHeaderStatus();
   updateZohoHeaderStatus();
 
   navigateTo('dashboard');
 
   setInterval(refreshCurrentPageFromCloud, 30000);
+  setInterval(updateCloudHeaderStatus, 30000);
   setInterval(updateZohoHeaderStatus, 30000);
 }
 
