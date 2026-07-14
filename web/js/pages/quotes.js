@@ -196,8 +196,104 @@ function showQuoteDetail(id) {
       <div style="text-align:right"><div style="font-size:10px;color:var(--text3)">TOTAL</div><div style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px;color:var(--brand-mid)">R${Math.round(q.grandTotal || 0).toLocaleString()}</div></div>
     </div>
     ${q.notes ? `<div class="flbl">Notes</div><div style="font-size:12px;color:var(--text2)">${escHtml(q.notes)}</div>` : ''}
-    <div style="margin-top:12px"><button class="btn bsm bo" onclick="window.print()"><i class="ti ti-printer" style="font-size:12px"></i> Print</button></div>
+    <div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn bsm bo" onclick="window.print()"><i class="ti ti-printer" style="font-size:12px"></i> Print</button>
+      <button class="btn bsm bo" onclick="saveQuoteToOneDrive('${q.id}')"><i class="ti ti-cloud-upload" style="font-size:12px"></i> Save to OneDrive</button>
+    </div>
   </div>`;
+}
+
+function quoteMoney(value) {
+  return 'R' + Math.round(Number(value || 0)).toLocaleString();
+}
+
+function textToBase64(text) {
+  const bytes = new TextEncoder().encode(text);
+  let binary = '';
+  bytes.forEach(b => { binary += String.fromCharCode(b); });
+  return btoa(binary);
+}
+
+function quoteExportHtml(q) {
+  const rows = (q.items || []).map(item => {
+    const total = item.total ?? ((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0));
+    return `<tr>
+      <td>${escHtml(item.description || '')}</td>
+      <td class="num">${escHtml(item.quantity || 0)}</td>
+      <td class="num">${quoteMoney(item.unitPrice)}</td>
+      <td class="num">${quoteMoney(total)}</td>
+    </tr>`;
+  }).join('');
+
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${escHtml(q.quoteNumber || 'Quote')}</title>
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;color:#17202a;margin:32px;line-height:1.45}
+    h1{margin:0 0 6px;font-size:24px}
+    .muted{color:#687582;font-size:12px}
+    .header{display:flex;justify-content:space-between;gap:24px;border-bottom:2px solid #0b6f9f;padding-bottom:16px;margin-bottom:24px}
+    .brand{text-align:right;font-size:12px}
+    table{width:100%;border-collapse:collapse;margin-top:18px}
+    th{font-size:11px;text-align:left;color:#687582;border-bottom:1px solid #d6dde5;padding:8px}
+    td{font-size:12px;border-bottom:1px solid #edf1f5;padding:8px;vertical-align:top}
+    .num{text-align:right}
+    .totals{margin-left:auto;margin-top:14px;width:280px}
+    .totals div{display:flex;justify-content:space-between;padding:5px 0;font-size:12px}
+    .grand{font-weight:700;font-size:16px;border-top:1px solid #d6dde5;margin-top:5px;padding-top:8px}
+    .notes{margin-top:22px;font-size:12px;white-space:pre-wrap}
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>${escHtml(q.quoteNumber || 'Quote')}</h1>
+      <div>${escHtml(q.title || '')}</div>
+      <div class="muted">${escHtml(q.clientName || '')} - Created ${escHtml(formatDate(q.createdAt))}</div>
+    </div>
+    <div class="brand">
+      <strong>TECHSINNO</strong><br>
+      Frank Muland<br>
+      frank@techsinno.com
+    </div>
+  </div>
+  <table>
+    <thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Total</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="totals">
+    <div><span>Subtotal</span><strong>${quoteMoney(q.subtotal)}</strong></div>
+    <div><span>VAT (${escHtml(q.vatRate || 15)}%)</span><strong>${quoteMoney(q.vatAmount)}</strong></div>
+    <div class="grand"><span>Total</span><span>${quoteMoney(q.grandTotal)}</span></div>
+  </div>
+  ${q.notes ? `<div class="notes"><strong>Notes</strong><br>${escHtml(q.notes)}</div>` : ''}
+</body>
+</html>`;
+}
+
+async function saveQuoteToOneDrive(id) {
+  const q = _quotes.find(x => x.id === id);
+  if (!q) return;
+  ntf('Saving quote to OneDrive...');
+  try {
+    const safeClient = (q.clientName || 'client').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').slice(0, 50) || 'client';
+    const name = `${q.quoteNumber || 'quote'}-${safeClient}.html`;
+    const data = await apiPost('/onedrive/upload', {
+      name,
+      contentType: 'text/html; charset=utf-8',
+      data: textToBase64(quoteExportHtml(q)),
+      folder: 'TECHSINNO Dashboard/Quotes'
+    });
+    if (data && data.error) {
+      ntf(data.error);
+      return;
+    }
+    ntf('Quote saved to OneDrive: ' + (data?.item?.name || name));
+  } catch (err) {
+    ntf('OneDrive save failed: ' + (err.message || 'unknown error'));
+  }
 }
 
 async function updateQuoteStatus(id, status) {

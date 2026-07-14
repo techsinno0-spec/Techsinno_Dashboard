@@ -7,7 +7,7 @@ const SERVICES = [
   { key: 'claude', label: 'Claude AI', icon: 'ti-robot', fields: ['apiKey'], note: 'AI assistant key used for drafts, scans, suggestions, and analysis.' },
   { key: 'hunter', label: 'Hunter.io', icon: 'ti-search', fields: ['apiKey'], note: 'Email finder for outreach lead discovery.' },
   { key: 'cloudflare', label: 'Cloudflare', icon: 'ti-cloud', fields: ['apiKey', 'zoneId'], note: 'Website analytics for techsinno.com traffic.' },
-  { key: 'onedrive', label: 'OneDrive', icon: 'ti-cloud-upload', fields: ['clientId', 'clientSecret'], note: 'Optional Microsoft/OneDrive file sync and backup connection.' },
+  { key: 'onedrive', label: 'OneDrive', icon: 'ti-cloud-upload', fields: ['clientId', 'clientSecret'], note: 'Microsoft OneDrive storage for dashboard exports, quotes, invoices, and downloaded attachments.' },
   { key: 'account_details', label: 'Account Details', icon: 'ti-building', fields: ['companyName', 'registrationNumber', 'email', 'phone', 'address', 'website', 'ownerName'], note: 'Company identity, primary email, and address.' }
 ];
 
@@ -28,7 +28,7 @@ const FIELD_LABELS = {
 };
 
 const CONFIG_CACHE = {};
-const OAUTH_SERVICES = ['zoho_books', 'zoho_mail', 'gmail', 'outlook'];
+const OAUTH_SERVICES = ['zoho_books', 'zoho_mail', 'gmail', 'outlook', 'onedrive'];
 const PUBLIC_DASHBOARD_BASE = 'https://nice-bay-095935e10.7.azurestaticapps.net';
 const OAUTH_POLLERS = {};
 
@@ -134,7 +134,8 @@ function oauthRedirectPath(key) {
     zoho_books: '/api/zoho-books/callback',
     zoho_mail: '/api/email/callback/zoho_mail',
     gmail: '/api/email/callback/gmail',
-    outlook: '/api/email/callback/outlook'
+    outlook: '/api/email/callback/outlook',
+    onedrive: '/api/onedrive/callback'
   }[key] || '';
 }
 
@@ -149,7 +150,8 @@ function oauthRedirectHint(key) {
   const provider = key.startsWith('zoho') ? 'Zoho API Console' : (key === 'gmail' ? 'Google Cloud Console' : 'Microsoft Azure app registration');
   const mismatchNotes = {
     gmail: 'Google error 400 redirect_uri_mismatch means this exact URI is missing under OAuth Client > Authorized redirect URIs.',
-    outlook: 'Microsoft AADSTS50011 means this exact URI is missing under App registration > Authentication > Web redirect URIs.'
+    outlook: 'Microsoft AADSTS50011 means this exact URI is missing under App registration > Authentication > Web redirect URIs.',
+    onedrive: 'Microsoft AADSTS50011 means this exact URI is missing under App registration > Authentication > Web redirect URIs.'
   };
   const mismatchNote = mismatchNotes[key]
     ? `<div style="font-size:10px;color:#f0b429;line-height:1.45;margin-top:6px">${mismatchNotes[key]}</div>`
@@ -198,7 +200,8 @@ function renderOAuthResult(key, data) {
   if (!el || !data?.url) return;
   const providerBlockMessage = {
     gmail: 'If Google blocks sign-in, add this URI to the OAuth client Authorized redirect URIs.',
-    outlook: 'If Microsoft blocks sign-in with AADSTS50011, add this URI under App registration > Authentication > Web redirect URIs.'
+    outlook: 'If Microsoft blocks sign-in with AADSTS50011, add this URI under App registration > Authentication > Web redirect URIs.',
+    onedrive: 'If Microsoft blocks sign-in with AADSTS50011, add this URI under App registration > Authentication > Web redirect URIs.'
   }[key];
   const mismatchNote = providerBlockMessage && data.redirectUri
     ? `<div style="font-size:10px;color:#f0b429;line-height:1.45;margin-top:6px">
@@ -285,7 +288,9 @@ async function connectServiceOAuth(key) {
     const query = qs ? `?${qs}` : '';
     const data = key === 'zoho_books'
       ? await apiGet('/zoho-books/connect' + query)
-      : await apiGet('/email/connect/' + key + query);
+      : key === 'onedrive'
+        ? await apiGet('/onedrive/connect' + query)
+        : await apiGet('/email/connect/' + key + query);
     if (!data?.url) { ntf('Failed to get authorization URL'); return; }
     if (data.redirectUri) {
       const redirectEl = document.getElementById(`cfg-redirect-${key}`);
@@ -294,7 +299,7 @@ async function connectServiceOAuth(key) {
     renderOAuthResult(key, data);
     pollOAuthConnection(key);
     const popup = window.open(data.url, `${key}_auth`, 'width=640,height=760,scrollbars=yes');
-    const expectedType = key === 'zoho_books' ? 'zoho-books-auth' : 'email-auth';
+    const expectedType = key === 'zoho_books' ? 'zoho-books-auth' : (key === 'onedrive' ? 'onedrive-auth' : 'email-auth');
     window.addEventListener('message', function handler(e) {
       if (e.data?.type === expectedType) {
         window.removeEventListener('message', handler);
@@ -429,7 +434,9 @@ async function disconnectServiceOAuth(key) {
   try {
     const data = key === 'zoho_books'
       ? await apiPut('/config/zoho_books', { accessToken: null, refreshToken: null, tokenExpiry: null, connected: false })
-      : await apiPost('/email/disconnect/' + key);
+      : key === 'onedrive'
+        ? await apiPost('/onedrive/disconnect')
+        : await apiPost('/email/disconnect/' + key);
     if (data && data.error) {
       ntf(data.error);
       return;

@@ -159,6 +159,7 @@ function renderEmailAttachments(provider, messageId, attachments = []) {
       <div style="display:flex;gap:5px;flex-shrink:0">
         ${canPreview ? `<button class="btn bsm bo" onclick="previewEmailAttachment(${args})"><i class="ti ti-eye" style="font-size:11px"></i> Preview</button>` : ''}
         <button class="btn bsm bo" onclick="downloadEmailAttachment(${args})"><i class="ti ti-download" style="font-size:11px"></i> Download</button>
+        <button class="btn bsm bo" onclick="saveEmailAttachmentToOneDrive(${args})"><i class="ti ti-cloud-upload" style="font-size:11px"></i> OneDrive</button>
       </div>
       <div id="${previewId}" class="email-attachment-preview"></div>
     </div>`;
@@ -597,6 +598,23 @@ async function loadEmailAttachment(provider, messageId, attachmentId, filename, 
   };
 }
 
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || '').split(',').pop() || '');
+    reader.onerror = () => reject(reader.error || new Error('Could not read file'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function oneDriveProviderFolder(provider) {
+  return {
+    gmail: 'Gmail',
+    outlook: 'Outlook',
+    zoho_mail: 'Zoho Mail'
+  }[provider] || 'Email';
+}
+
 async function previewEmailAttachment(provider, messageId, attachmentId, filename, folderId, mimeType, accountId, previewId) {
   const box = document.getElementById(previewId);
   if (!box) return;
@@ -642,5 +660,28 @@ async function downloadEmailAttachment(provider, messageId, attachmentId, filena
     ntf('Downloaded ' + file.name);
   } catch {
     ntf('Download failed');
+  }
+}
+
+async function saveEmailAttachmentToOneDrive(provider, messageId, attachmentId, filename, folderId, mimeType, accountId) {
+  ntf('Saving ' + filename + ' to OneDrive...');
+  try {
+    const file = await loadEmailAttachment(provider, messageId, attachmentId, filename, folderId, mimeType, accountId);
+    const base64 = await blobToBase64(file.blob);
+    const month = new Date().toISOString().slice(0, 7);
+    const data = await apiPost('/onedrive/upload', {
+      name: file.name,
+      contentType: file.contentType,
+      data: base64,
+      folder: `TECHSINNO Dashboard/Email Attachments/${oneDriveProviderFolder(provider)}/${month}`
+    });
+    if (data && data.error) {
+      ntf(data.error);
+      return;
+    }
+    ntf('Saved to OneDrive: ' + (data?.item?.name || file.name));
+    setTimeout(() => URL.revokeObjectURL(file.url), 1000);
+  } catch (err) {
+    ntf('OneDrive save failed: ' + (err.message || 'unknown error'));
   }
 }
