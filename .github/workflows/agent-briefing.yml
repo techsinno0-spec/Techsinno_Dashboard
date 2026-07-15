@@ -1,0 +1,84 @@
+name: Morning briefing (scheduled)
+
+# Emails Frank the TECHSINNO morning briefing by calling the cloud API
+# endpoint /api/agent/briefing. Uses the same secrets as the agent scan:
+# DASHBOARD_API_BASE + AGENT_SCAN_SECRET (or SCAN_USERNAME/SCAN_PASSWORD).
+
+on:
+  schedule:
+    # 05:00 UTC = 07:00 SAST, Monday–Friday.
+    # For every day, change to:  '0 5 * * *'
+    - cron: '0 5 * * 1-5'
+  # Adds a "Run workflow" button in the GitHub Actions tab for manual sends.
+  workflow_dispatch: {}
+
+# Never let two briefings overlap.
+concurrency:
+  group: agent-briefing
+  cancel-in-progress: false
+
+jobs:
+  briefing:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger morning briefing
+        env:
+          API_BASE: ${{ secrets.DASHBOARD_API_BASE }}
+          AGENT_SCAN_SECRET: ${{ secrets.AGENT_SCAN_SECRET }}
+          SCAN_USERNAME: ${{ secrets.SCAN_USERNAME }}
+          SCAN_PASSWORD: ${{ secrets.SCAN_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          finish_with_problem() {
+            local message="$1"
+            echo "::warning::$message"
+            if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+              exit 1
+            fi
+            echo "Scheduled briefing skipped/failed without failing the workflow. Run this workflow manually to diagnose."
+            exit 0
+          }
+
+          if [ -z "${API_BASE:-}" ]; then finish_with_problem "DASHBOARD_API_BASE secret is not set"; fi
+          echo "Sending morning briefing..."
+          if [ -n "${AGENT_SCAN_SECRET:-}" ]; then
+            RESP=$(curl -sS --max-time 180 -X POST "$API_BASE/api/agent/briefing" \
+              -H "X-Agent-Scan-Secret: $AGENT_SCAN_SECRET" \
+              -H "Content-Type: application/json" \
+              -d '{}' || true)
+          else
+            if [ -z "${SCAN_USERNAME:-}" ] || [ -z "${SCAN_PASSWORD:-}" ]; then finish_with_problem "AGENT_SCAN_SECRET is not set, and SCAN_USERNAME or SCAN_PASSWORD is not set"; fi
+
+            echo "Logging in as scan user..."
+            LOGIN=$(curl -sS --max-time 30 -X POST "$API_BASE/api/auth/login" \
+              -H "Content-Type: application/json" \
+              -d "{\"username\":\"$SCAN_USERNAME\",\"password\":\"$SCAN_PASSWORD\"}" || true)
+
+            TOKEN=$(echo "$LOGIN" | jq -r '.token // empty' 2>/dev/null || true)
+            if [ -z "$TOKEN" ]; then
+              finish_with_problem "Login failed: no token returned. Check SCAN_USERNAME, SCAN_PASSWORD, and DASHBOARD_API_BASE."
+            fi
+            echo "Login OK."
+
+            RESP=$(curl -sS --max-time 180 -X POST "$API_BASE/api/agent/briefing" \
+              -H "Authorization: Bearer $TOKEN" \
+              -H "Content-Type: application/json" \
+              -d '{}' || true)
+          fi
+
+          if [ -z "$RESP" ]; then
+            finish_with_problem "Briefing endpoint returned an empty response."
+          fi
+
+          if ! echo "$RESP" | jq -e . >/dev/null 2>&1; then
+            finish_with_problem "Briefing endpoint returned a non-JSON response."
+          fi
+
+          # Show a compact summary (never the full briefing or any token).
+          echo "$RESP" | jq '{success, sentTo, provider}'
+
+          if echo "$RESP" | jq -e 'has("error") or (.success == false)' >/dev/null 2>&1; then
+            finish_with_problem "Briefing endpoint reported an error."
+          fi
+          echo "Briefing sent."
