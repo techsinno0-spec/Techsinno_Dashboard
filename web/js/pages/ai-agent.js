@@ -4,6 +4,18 @@ let webAgentLastErrors = [];
 let webAgentTab = 0;
 let webManualTasks = [];
 let webAgentJobCards = [];
+let webAgentChatMessages = [];
+
+const WEB_AGENT_CHAT_KEY = 'techsinno_agent_chat_v1';
+
+const webAgentQuickPrompts = [
+  { role: 'Secretary', icon: 'ti-mail-search', prompt: 'Act as my secretary. Triage my unread emails, identify urgent replies or RFQs, and draft any replies that should wait for my approval.' },
+  { role: 'Administrator', icon: 'ti-clipboard-check', prompt: 'Act as my administrator. Review tasks, job cards, reminders and CRM follow-ups. Tell me what is overdue, blocked, or missing an owner, then create the most important tasks.' },
+  { role: 'Bookkeeper', icon: 'ti-cash', prompt: 'Act as my bookkeeper. Check Zoho Books, list overdue or unpaid invoices, cash concerns, and draft polite payment follow-ups for approval.' },
+  { role: 'Marketing', icon: 'ti-speakerphone', prompt: 'Act as my marketing agent. Review CRM leads and campaigns, suggest the next outreach angle, and draft problem-first emails for approval.' },
+  { role: 'Work sourcing', icon: 'ti-briefcase', prompt: 'Act as my work sourcing agent. Review my leads, opportunities and queue. Suggest where to find the next TECHSINNO jobs and create follow-up actions.' },
+  { role: 'Today', icon: 'ti-list-check', prompt: 'Give me my executive briefing for today. Use live dashboard data first, then give me the top 5 actions in priority order.' }
+];
 
 const webAgentTypeLabel = {
   email_reply:'Lead reply', cold_email:'Cold email', quote_draft:'Quote draft', linkedin_post:'LinkedIn post',
@@ -38,6 +50,7 @@ async function render_agent() {
       <button class="btn bo bsm" style="color:#f85149;border-color:rgba(248,81,73,.3)" onclick="webAgentReset()" title="Clear cloud queue"><i class="ti ti-trash"></i> Reset all</button>
     </div>
   </div>
+  ${webAgentRenderAssistantPanel()}
   <div id="webAgentErrors"></div>
   <div class="g4" style="margin-bottom:14px">
     <div class="stat"><div class="slbl">Pending approval</div><div class="sval ca" id="webAgPending">—</div><div class="ssub">ready for your review</div></div>
@@ -76,6 +89,126 @@ async function render_agent() {
 function webAgentFmtTime(ts) {
   if (!ts) return '—';
   return new Date(ts).toLocaleString('en-ZA', { weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+}
+
+function webAgentLoadChat() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(WEB_AGENT_CHAT_KEY) || '[]');
+    webAgentChatMessages = Array.isArray(saved) ? saved.slice(-12) : [];
+  } catch {
+    webAgentChatMessages = [];
+  }
+}
+
+function webAgentSaveChat() {
+  localStorage.setItem(WEB_AGENT_CHAT_KEY, JSON.stringify(webAgentChatMessages.slice(-12)));
+}
+
+function webAgentRenderAssistantPanel() {
+  webAgentLoadChat();
+  return `<div class="card" style="padding:13px 14px;margin-bottom:14px">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:7px"><i class="ti ti-robot" style="color:#a371f7"></i> Personal AI command center</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:3px;line-height:1.5">Ask it to work as secretary, administrator, bookkeeper, marketing assistant, lead sourcer or daily operations assistant. It can read live dashboard data and queue actions for approval.</div>
+      </div>
+      <button class="btn bsm bo" onclick="webAgentClearChat()"><i class="ti ti-eraser"></i> Clear chat</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:6px;margin-bottom:10px">
+      ${webAgentQuickPrompts.map((p, i) => `<button class="btn bsm bo" style="justify-content:flex-start;text-align:left;min-height:34px" onclick="webAgentUsePrompt(${i})"><i class="ti ${p.icon}"></i> ${escHtml(p.role)}</button>`).join('')}
+    </div>
+    <div id="webAgentChatLog" style="max-height:320px;overflow:auto;background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px;margin-bottom:8px">${webAgentRenderChatMessages()}</div>
+    <div style="display:flex;gap:8px;align-items:flex-end">
+      <textarea id="webAgentChatInput" placeholder="Example: Check my inbox, add follow-up tasks, and draft replies I should approve." style="flex:1;min-height:58px;resize:vertical;font-size:12px;box-sizing:border-box"></textarea>
+      <button class="btn" id="webAgentChatBtn" onclick="webAgentSendChat()" style="height:36px"><i class="ti ti-send"></i> Ask</button>
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-top:7px;line-height:1.5">Safety: emails are drafted into the approval queue, not sent automatically. Financial tools require owner access.</div>
+  </div>`;
+}
+
+function webAgentRenderChatMessages() {
+  if (!webAgentChatMessages.length) {
+    return `<div style="font-size:12px;color:var(--text3);line-height:1.6;padding:10px;text-align:center">No assistant chat yet. Pick a role above or ask for today's priorities.</div>`;
+  }
+  return webAgentChatMessages.map(m => {
+    const isUser = m.role === 'user';
+    return `<div style="display:flex;justify-content:${isUser ? 'flex-end' : 'flex-start'};margin-bottom:8px">
+      <div style="max-width:82%;background:${isUser ? 'rgba(95,168,196,.18)' : 'var(--bg3)'};border:1px solid ${isUser ? 'rgba(95,168,196,.35)' : 'var(--border)'};border-radius:var(--radius-sm);padding:8px 10px">
+        <div style="font-size:10px;color:${isUser ? 'var(--brand-mid)' : '#a371f7'};font-family:'DM Mono',monospace;margin-bottom:4px">${isUser ? 'YOU' : 'AI AGENT'}</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.55;white-space:pre-wrap">${escHtml(m.content || '')}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function webAgentSetChatLogLoading() {
+  const log = document.getElementById('webAgentChatLog');
+  if (!log) return;
+  log.innerHTML = webAgentRenderChatMessages() + `<div style="display:flex;align-items:center;gap:7px;color:var(--text3);font-size:11px;padding:6px 8px"><div class="spin" style="width:12px;height:12px;border-width:2px"></div> Agent is checking live data...</div>`;
+  log.scrollTop = log.scrollHeight;
+}
+
+function webAgentRefreshChatLog() {
+  const log = document.getElementById('webAgentChatLog');
+  if (!log) return;
+  log.innerHTML = webAgentRenderChatMessages();
+  log.scrollTop = log.scrollHeight;
+}
+
+function webAgentChatPayload() {
+  const messages = webAgentChatMessages.filter(m => m && (m.role === 'user' || m.role === 'assistant') && m.content);
+  while (messages.length && messages[0].role !== 'user') messages.shift();
+  return messages;
+}
+
+function webAgentUsePrompt(index) {
+  const p = webAgentQuickPrompts[index];
+  const input = document.getElementById('webAgentChatInput');
+  if (p && input) {
+    input.value = p.prompt;
+    input.focus();
+  }
+}
+
+function webAgentClearChat() {
+  webAgentChatMessages = [];
+  webAgentSaveChat();
+  webAgentRefreshChatLog();
+}
+
+async function webAgentSendChat() {
+  const input = document.getElementById('webAgentChatInput');
+  const btn = document.getElementById('webAgentChatBtn');
+  const prompt = input?.value.trim();
+  if (!prompt) return ntf('Ask the agent what to do');
+
+  webAgentChatMessages.push({ role: 'user', content: prompt });
+  webAgentChatMessages = webAgentChatMessages.slice(-12);
+  webAgentSaveChat();
+  if (input) input.value = '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spin" style="width:12px;height:12px;border-width:2px"></div> Working'; }
+  webAgentSetChatLogLoading();
+
+  try {
+    const data = await apiPost('/ai/chat', { messages: webAgentChatPayload() });
+    if (data && data.error) {
+      webAgentChatMessages.push({ role: 'assistant', content: data.error });
+      ntf(data.error);
+    } else {
+      webAgentChatMessages.push({ role: 'assistant', content: data?.text || 'Done.' });
+      if (Array.isArray(data?.actions) && data.actions.length) await webAgentLoadQueue();
+    }
+    webAgentChatMessages = webAgentChatMessages.slice(-12);
+    webAgentSaveChat();
+    webAgentRefreshChatLog();
+  } catch {
+    webAgentChatMessages.push({ role: 'assistant', content: 'I could not reach the AI service. Check Claude configuration in Settings and try again.' });
+    webAgentSaveChat();
+    webAgentRefreshChatLog();
+    ntf('AI chat failed');
+  }
+
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-send"></i> Ask'; }
 }
 
 async function webAgentLoadQueue() {
