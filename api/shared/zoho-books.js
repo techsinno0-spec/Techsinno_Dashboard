@@ -30,6 +30,13 @@ function booksConfigured(config) {
   return !!(config && config.clientId && (config.refreshToken || config.accessToken));
 }
 
+function zohoErrorMessage(err, label) {
+  const data = err?.response?.data || {};
+  const detail = data.message || data.error_description || data.error || err.message || 'request failed';
+  const status = err?.response?.status ? ` (${err.response.status})` : '';
+  return `${label}: ${detail}${status}`;
+}
+
 async function ensureBooksToken(config) {
   if (config.accessToken && config.tokenExpiry && Date.now() < config.tokenExpiry - 60000) {
     return config.accessToken;
@@ -69,11 +76,15 @@ async function booksGet(config, path, params = {}) {
   const headers = { Authorization: `Zoho-oauthtoken ${token}` };
   const apiBase = getBooksRegion(config.region || 'com').api;
   const orgId = await ensureBooksOrgId(config, headers);
-  const res = await axios.get(`${apiBase}${path}`, {
-    headers,
-    params: { organization_id: orgId, ...params }
-  });
-  return res.data;
+  try {
+    const res = await axios.get(`${apiBase}${path}`, {
+      headers,
+      params: { organization_id: orgId, ...params }
+    });
+    return res.data;
+  } catch (err) {
+    throw new Error(zohoErrorMessage(err, `Zoho Books ${path}`));
+  }
 }
 
 function daysBetween(from, to) {
@@ -91,7 +102,7 @@ async function getBooksSnapshot() {
   if (!booksConfigured(config)) return null;
 
   const [invData, expData] = await Promise.all([
-    booksGet(config, '/invoices', { status: 'all', per_page: 200 }),
+    booksGet(config, '/invoices', { per_page: 200 }),
     booksGet(config, '/expenses', { per_page: 200 })
   ]);
 

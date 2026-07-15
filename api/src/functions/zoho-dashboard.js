@@ -15,6 +15,13 @@ function getZohoBooksRegion(region) {
   return ZOHO_BOOKS_REGIONS[region] || ZOHO_BOOKS_REGIONS.com;
 }
 
+function zohoErrorMessage(err) {
+  const data = err?.response?.data || {};
+  const detail = data.message || data.error_description || data.error || err.message || 'request failed';
+  const status = err?.response?.status ? ` (${err.response.status})` : '';
+  return `Zoho Books: ${detail}${status}`;
+}
+
 async function ensureZohoToken(config) {
   if (config.accessToken && config.tokenExpiry && Date.now() < config.tokenExpiry - 60000) {
     return config.accessToken;
@@ -71,7 +78,7 @@ app.http('zoho-dashboard', {
       const params = { organization_id: orgId };
 
       const [invoices, expenses, contacts] = await Promise.all([
-        axios.get(`${apiBase}/invoices`, { headers, params: { ...params, status: 'all', per_page: 200 } }),
+        axios.get(`${apiBase}/invoices`, { headers, params: { ...params, per_page: 200 } }),
         axios.get(`${apiBase}/expenses`, { headers, params: { ...params, per_page: 200 } }),
         axios.get(`${apiBase}/contacts`, { headers, params: { ...params, per_page: 200 } })
       ]);
@@ -112,7 +119,7 @@ app.http('zoho-dashboard', {
         recentExpenses
       });
     } catch (err) {
-      return jsonResponse({ error: err.message || 'Failed to fetch Zoho data' }, 500);
+      return jsonResponse({ error: zohoErrorMessage(err) }, 500);
     }
   }
 });
