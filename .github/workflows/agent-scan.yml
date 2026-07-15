@@ -30,32 +30,49 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ -z "${API_BASE:-}" ]; then echo "DASHBOARD_API_BASE secret is not set"; exit 1; fi
+          finish_with_problem() {
+            local message="$1"
+            echo "::warning::$message"
+            if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+              exit 1
+            fi
+            echo "Scheduled scan skipped/failed without failing the workflow. Run this workflow manually to diagnose."
+            exit 0
+          }
+
+          if [ -z "${API_BASE:-}" ]; then finish_with_problem "DASHBOARD_API_BASE secret is not set"; fi
+          if [ -z "${SCAN_USERNAME:-}" ] || [ -z "${SCAN_PASSWORD:-}" ]; then finish_with_problem "SCAN_USERNAME or SCAN_PASSWORD secret is not set"; fi
 
           echo "Logging in as scan user..."
-          LOGIN=$(curl -sS -X POST "$API_BASE/api/auth/login" \
+          LOGIN=$(curl -sS --max-time 30 -X POST "$API_BASE/api/auth/login" \
             -H "Content-Type: application/json" \
-            -d "{\"username\":\"$SCAN_USERNAME\",\"password\":\"$SCAN_PASSWORD\"}")
+            -d "{\"username\":\"$SCAN_USERNAME\",\"password\":\"$SCAN_PASSWORD\"}" || true)
 
-          TOKEN=$(echo "$LOGIN" | jq -r '.token // empty')
+          TOKEN=$(echo "$LOGIN" | jq -r '.token // empty' 2>/dev/null || true)
           if [ -z "$TOKEN" ]; then
-            echo "Login failed (no token returned). Check SCAN_USERNAME / SCAN_PASSWORD / DASHBOARD_API_BASE."
+            finish_with_problem "Login failed: no token returned. Check SCAN_USERNAME, SCAN_PASSWORD, and DASHBOARD_API_BASE."
             # Do not print $LOGIN in full — it may contain sensitive detail.
-            exit 1
           fi
           echo "Login OK."
 
           echo "Running agent scan..."
-          RESP=$(curl -sS -X POST "$API_BASE/api/agent/scan" \
+          RESP=$(curl -sS --max-time 180 -X POST "$API_BASE/api/agent/scan" \
             -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
-            -d '{}')
+            -d '{}' || true)
+
+          if [ -z "$RESP" ]; then
+            finish_with_problem "Agent scan returned an empty response."
+          fi
+
+          if ! echo "$RESP" | jq -e . >/dev/null 2>&1; then
+            finish_with_problem "Agent scan returned a non-JSON response."
+          fi
 
           # Show a compact summary (never the token).
-          echo "$RESP" | jq '{success, newItems, lastScan, errors}' || echo "$RESP"
+          echo "$RESP" | jq '{success, newItems, lastScan, errors}'
 
-          if echo "$RESP" | jq -e 'has("error")' >/dev/null 2>&1; then
-            echo "Scan reported an error."
-            exit 1
+          if echo "$RESP" | jq -e 'has("error") or (.success == false)' >/dev/null 2>&1; then
+            finish_with_problem "Agent scan endpoint reported an error."
           fi
           echo "Scan complete."
