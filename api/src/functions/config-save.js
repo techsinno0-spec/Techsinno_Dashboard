@@ -3,6 +3,25 @@ const { getItem, createItem, replaceItem } = require('../../shared/cosmos');
 const { authenticate, jsonResponse, unauthorized, forbidden, badRequest, isOwner } = require('../../shared/auth');
 const { CONFIG_SERVICES, safeConfig } = require('../../shared/config-safe');
 
+const OAUTH_CONFIG_SERVICES = new Set(['zoho_books', 'zoho_mail', 'gmail', 'outlook']);
+
+function clearOAuthTokensIfCredentialsChanged(config, body) {
+  if (!OAUTH_CONFIG_SERVICES.has(config.service)) return;
+
+  const clientIdChanged = body.clientId !== undefined && body.clientId !== config.clientId;
+  const hasNewSecret = body.clientSecret !== undefined && body.clientSecret !== '••••••••';
+  const clientSecretChanged = hasNewSecret && body.clientSecret !== config.clientSecret;
+
+  if (!clientIdChanged && !clientSecretChanged) return;
+
+  config.accessToken = null;
+  config.refreshToken = null;
+  config.tokenExpiry = 0;
+  config.connected = false;
+  config.reconnectRequired = true;
+  config.lastAuthError = 'OAuth credentials changed. Reconnect this integration.';
+}
+
 app.http('config-save', {
   methods: ['PUT'],
   authLevel: 'anonymous',
@@ -24,6 +43,7 @@ app.http('config-save', {
       try { existing = await getItem('config', id); } catch {}
 
       const config = existing || { id, service };
+      clearOAuthTokensIfCredentialsChanged(config, body);
       if (body.goals !== undefined) config.goals = body.goals;
       if (body.clientId !== undefined) config.clientId = body.clientId;
       if (body.clientSecret !== undefined && body.clientSecret !== '••••••••') config.clientSecret = body.clientSecret;
