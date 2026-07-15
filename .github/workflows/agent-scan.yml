@@ -25,6 +25,7 @@ jobs:
       - name: Trigger cloud agent scan
         env:
           API_BASE: ${{ secrets.DASHBOARD_API_BASE }}
+          AGENT_SCAN_SECRET: ${{ secrets.AGENT_SCAN_SECRET }}
           SCAN_USERNAME: ${{ secrets.SCAN_USERNAME }}
           SCAN_PASSWORD: ${{ secrets.SCAN_PASSWORD }}
         run: |
@@ -41,25 +42,32 @@ jobs:
           }
 
           if [ -z "${API_BASE:-}" ]; then finish_with_problem "DASHBOARD_API_BASE secret is not set"; fi
-          if [ -z "${SCAN_USERNAME:-}" ] || [ -z "${SCAN_PASSWORD:-}" ]; then finish_with_problem "SCAN_USERNAME or SCAN_PASSWORD secret is not set"; fi
-
-          echo "Logging in as scan user..."
-          LOGIN=$(curl -sS --max-time 30 -X POST "$API_BASE/api/auth/login" \
-            -H "Content-Type: application/json" \
-            -d "{\"username\":\"$SCAN_USERNAME\",\"password\":\"$SCAN_PASSWORD\"}" || true)
-
-          TOKEN=$(echo "$LOGIN" | jq -r '.token // empty' 2>/dev/null || true)
-          if [ -z "$TOKEN" ]; then
-            finish_with_problem "Login failed: no token returned. Check SCAN_USERNAME, SCAN_PASSWORD, and DASHBOARD_API_BASE."
-            # Do not print $LOGIN in full — it may contain sensitive detail.
-          fi
-          echo "Login OK."
-
           echo "Running agent scan..."
-          RESP=$(curl -sS --max-time 180 -X POST "$API_BASE/api/agent/scan" \
-            -H "Authorization: Bearer $TOKEN" \
-            -H "Content-Type: application/json" \
-            -d '{}' || true)
+          if [ -n "${AGENT_SCAN_SECRET:-}" ]; then
+            RESP=$(curl -sS --max-time 180 -X POST "$API_BASE/api/agent/scan" \
+              -H "X-Agent-Scan-Secret: $AGENT_SCAN_SECRET" \
+              -H "Content-Type: application/json" \
+              -d '{}' || true)
+          else
+            if [ -z "${SCAN_USERNAME:-}" ] || [ -z "${SCAN_PASSWORD:-}" ]; then finish_with_problem "AGENT_SCAN_SECRET is not set, and SCAN_USERNAME or SCAN_PASSWORD is not set"; fi
+
+            echo "Logging in as scan user..."
+            LOGIN=$(curl -sS --max-time 30 -X POST "$API_BASE/api/auth/login" \
+              -H "Content-Type: application/json" \
+              -d "{\"username\":\"$SCAN_USERNAME\",\"password\":\"$SCAN_PASSWORD\"}" || true)
+
+            TOKEN=$(echo "$LOGIN" | jq -r '.token // empty' 2>/dev/null || true)
+            if [ -z "$TOKEN" ]; then
+              finish_with_problem "Login failed: no token returned. Check SCAN_USERNAME, SCAN_PASSWORD, and DASHBOARD_API_BASE."
+              # Do not print $LOGIN in full — it may contain sensitive detail.
+            fi
+            echo "Login OK."
+
+            RESP=$(curl -sS --max-time 180 -X POST "$API_BASE/api/agent/scan" \
+              -H "Authorization: Bearer $TOKEN" \
+              -H "Content-Type: application/json" \
+              -d '{}' || true)
+          fi
 
           if [ -z "$RESP" ]; then
             finish_with_problem "Agent scan returned an empty response."
@@ -71,6 +79,11 @@ jobs:
 
           # Show a compact summary (never the token).
           echo "$RESP" | jq '{success, newItems, lastScan, errors}'
+
+          ERRORS=$(echo "$RESP" | jq -r '(.errors // []) | join("; ")')
+          if [ -n "$ERRORS" ]; then
+            echo "::warning::Agent scan completed with warnings: $ERRORS"
+          fi
 
           if echo "$RESP" | jq -e 'has("error") or (.success == false)' >/dev/null 2>&1; then
             finish_with_problem "Agent scan endpoint reported an error."

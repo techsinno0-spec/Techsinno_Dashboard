@@ -1,6 +1,7 @@
 const { app } = require('@azure/functions');
 const axios = require('axios');
 const Anthropic = require('@anthropic-ai/sdk');
+const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const { getItem, createItem, replaceItem, queryItems } = require('../../shared/cosmos');
 const { authenticate, jsonResponse, unauthorized, forbidden } = require('../../shared/auth');
@@ -72,6 +73,25 @@ async function getClaude() {
   try { cfg = await getItem('config', 'cfg_claude'); } catch {}
   if (!cfg || !cfg.apiKey) throw new Error('Claude API key not configured in cloud Settings');
   return new Anthropic({ apiKey: cfg.apiKey });
+}
+
+function constantTimeEqual(a, b) {
+  const left = Buffer.from(String(a || ''));
+  const right = Buffer.from(String(b || ''));
+  if (!left.length || left.length !== right.length) return false;
+  return crypto.timingSafeEqual(left, right);
+}
+
+function authenticateAgentScanSecret(request) {
+  const expected = process.env.AGENT_SCAN_SECRET || '';
+  const provided = request.headers.get('x-agent-scan-secret') || '';
+  if (!constantTimeEqual(provided, expected)) return null;
+  return {
+    sub: 'scheduled-agent-scan',
+    role: 'manager',
+    accountRole: 'manager',
+    isOwner: false
+  };
 }
 
 async function loadBusinessContext() {
@@ -507,7 +527,7 @@ app.http('agent-scan', {
   authLevel: 'anonymous',
   route: 'agent/scan',
   handler: async (request) => {
-    const decoded = authenticate(request);
+    const decoded = authenticate(request) || authenticateAgentScanSecret(request);
     if (!decoded) return unauthorized();
     if (decoded.role !== 'manager') return forbidden();
 
@@ -515,7 +535,13 @@ app.http('agent-scan', {
     const newItems = [];
 
     try {
-      const client = await getClaude();
+      let client = null;
+      try {
+        client = await getClaude();
+      } catch (err) {
+        errors.push('Claude: ' + err.message);
+      }
+
       const queueDoc = await loadQueue();
       const existing = new Set((queueDoc.queue || []).map(itemFingerprint).filter(Boolean));
 
@@ -525,11 +551,12 @@ app.http('agent-scan', {
         ...(await getMailSamples('outlook'))
       ];
 
-      if (mail.length) {
-        const r = await client.messages.create({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 2200,
-          messages: [{ role: 'user', content: `You are Frank Muland's AI agent for TECHSINNO (Pty) Ltd, Kuilsriver, Western Cape, South Africa.
+      if (mail.length && client) {
+        try {
+          const r = await client.messages.create({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 2200,
+            messages: [{ role: 'user', content: `You are Frank Muland's AI agent for TECHSINNO (Pty) Ltd, Kuilsriver, Western Cape, South Africa.
 
 Services: PCB repair, factory automation (PLC/SCADA), IoT monitoring.
 
@@ -542,29 +569,33 @@ ${JSON.stringify(mail)}
 Return ONLY valid JSON array:
 [{"emailId":"id","provider":"zoho_mail|gmail|outlook","type":"email_reply","priority":1-5,"flagType":"lead|quote_request|urgent|follow_up","reason":"max 8 words","toAddress":"sender email","companyName":"company name/domain guess","contactName":"sender name if known","industry":"manufacturing|mining|agriculture|logistics|energy|food_processing|construction|other","painPoint":"specific likely or explicit operational problem","evidence":"email phrase/domain/sector used; say assumption if inferred","techsinnoSolution":"which TECHSINNO service fits and why","nextStep":"small practical next step to offer","subject":"specific Re: subject","body":"professional reply, 3-5 sentences, ending with Frank's signature"}]
 Return [] if none qualify.` }]
-        });
-        parseJsonArray(r.content[0]?.text).forEach(item => {
-          if (!existing.has(item.emailId)) {
-            newItems.push({
-              id: uuidv4(), type: 'email_reply', source: item.provider || 'cloud_mail', emailId: item.emailId,
-              priority: item.priority || 3, flagType: item.flagType || 'lead', title: item.subject, reason: item.reason,
-              to: item.toAddress || '', subject: item.subject, body: item.body, provider: item.provider || 'zoho_mail',
-              companyName: item.companyName || '', contactName: item.contactName || '', industry: item.industry || 'other',
-              painPoint: item.painPoint || '', evidence: item.evidence || '', techsinnoSolution: item.techsinnoSolution || '',
-              nextStep: item.nextStep || '', status: 'pending', createdAt: Date.now()
-            });
-            existing.add(item.emailId);
-          }
-        });
+          });
+          parseJsonArray(r.content[0]?.text).forEach(item => {
+            if (!existing.has(item.emailId)) {
+              newItems.push({
+                id: uuidv4(), type: 'email_reply', source: item.provider || 'cloud_mail', emailId: item.emailId,
+                priority: item.priority || 3, flagType: item.flagType || 'lead', title: item.subject, reason: item.reason,
+                to: item.toAddress || '', subject: item.subject, body: item.body, provider: item.provider || 'zoho_mail',
+                companyName: item.companyName || '', contactName: item.contactName || '', industry: item.industry || 'other',
+                painPoint: item.painPoint || '', evidence: item.evidence || '', techsinnoSolution: item.techsinnoSolution || '',
+                nextStep: item.nextStep || '', status: 'pending', createdAt: Date.now()
+              });
+              existing.add(item.emailId);
+            }
+          });
+        } catch (err) {
+          errors.push('Mail AI: ' + err.message);
+        }
       }
 
-      try {
-        const jobs = await fetchUpworkRSS();
-        if (jobs.length) {
-          const r = await client.messages.create({
-            model: 'claude-haiku-4-5-20251001',
-            max_tokens: 1600,
-            messages: [{ role: 'user', content: `TECHSINNO does PCB repair, PLC/SCADA automation, and IoT monitoring in South Africa.
+      if (client) {
+        try {
+          const jobs = await fetchUpworkRSS();
+          if (jobs.length) {
+            const r = await client.messages.create({
+              model: 'claude-haiku-4-5-20251001',
+              max_tokens: 1600,
+              messages: [{ role: 'user', content: `TECHSINNO does PCB repair, PLC/SCADA automation, and IoT monitoring in South Africa.
 ${SCOUT_RULES}
 
 From these Upwork jobs pick the top 3 most relevant:
@@ -572,20 +603,21 @@ ${JSON.stringify(jobs)}
 
 Return ONLY JSON array:
 [{"title":"job title","url":"url","relevance":1-10,"reason":"max 8 words","painPoint":"problem client likely has","techsinnoSolution":"service fit","nextStep":"first action","bidProposal":"short practical bid from Frank"}]` }]
-          });
-          parseJsonArray(r.content[0]?.text).filter(j => (j.relevance || 0) >= 6).forEach(item => {
-            if (!existing.has(item.url)) {
-              newItems.push({
-                id: uuidv4(), type: 'opportunity', source: 'upwork', priority: Math.ceil((10 - (item.relevance || 6)) / 2),
-                flagType: 'opportunity', title: item.title, reason: item.reason, url: item.url, platform: 'Upwork',
-                body: item.bidProposal, painPoint: item.painPoint || '', techsinnoSolution: item.techsinnoSolution || '',
-                nextStep: item.nextStep || '', status: 'pending', createdAt: Date.now()
-              });
-              existing.add(item.url);
-            }
-          });
-        }
-      } catch (err) { errors.push('Upwork: ' + err.message); }
+            });
+            parseJsonArray(r.content[0]?.text).filter(j => (j.relevance || 0) >= 6).forEach(item => {
+              if (!existing.has(item.url)) {
+                newItems.push({
+                  id: uuidv4(), type: 'opportunity', source: 'upwork', priority: Math.ceil((10 - (item.relevance || 6)) / 2),
+                  flagType: 'opportunity', title: item.title, reason: item.reason, url: item.url, platform: 'Upwork',
+                  body: item.bidProposal, painPoint: item.painPoint || '', techsinnoSolution: item.techsinnoSolution || '',
+                  nextStep: item.nextStep || '', status: 'pending', createdAt: Date.now()
+                });
+                existing.add(item.url);
+              }
+            });
+          }
+        } catch (err) { errors.push('Upwork: ' + err.message); }
+      }
 
       try {
         const ctx = await loadBusinessContext();
@@ -598,12 +630,18 @@ Return ONLY JSON array:
           }
         }
 
-        const claudeAdminItems = await buildClaudeAdminItems(client, ctx);
-        for (const item of claudeAdminItems) {
-          const fp = itemFingerprint(item);
-          if (fp && !existing.has(fp)) {
-            newItems.push(item);
-            existing.add(fp);
+        if (client) {
+          try {
+            const claudeAdminItems = await buildClaudeAdminItems(client, ctx);
+            for (const item of claudeAdminItems) {
+              const fp = itemFingerprint(item);
+              if (fp && !existing.has(fp)) {
+                newItems.push(item);
+                existing.add(fp);
+              }
+            }
+          } catch (err) {
+            errors.push('Admin AI: ' + err.message);
           }
         }
       } catch (err) {
