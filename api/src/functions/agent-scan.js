@@ -115,16 +115,24 @@ async function loadBusinessContext() {
     try { return await fn(); } catch { return fallback; }
   };
 
-  const [tasks, jobCards, clients, projects, campaigns, users] = await Promise.all([
+  const [tasks, jobCards, clients, projects, campaigns, users, quotes, reminders] = await Promise.all([
     safe(() => queryItems('tasks', 'SELECT * FROM c ORDER BY c.updatedAt DESC OFFSET 0 LIMIT 80')),
     safe(() => queryItems('job-cards', 'SELECT * FROM c ORDER BY c.updatedAt DESC OFFSET 0 LIMIT 60')),
     safe(() => queryItems('clients', 'SELECT * FROM c ORDER BY c.updatedAt DESC OFFSET 0 LIMIT 60')),
     safe(() => queryItems('projects', 'SELECT * FROM c ORDER BY c.updatedAt DESC OFFSET 0 LIMIT 40')),
     safe(() => queryItems('campaigns', 'SELECT * FROM c ORDER BY c.updatedAt DESC OFFSET 0 LIMIT 30')),
-    safe(() => queryItems('users', 'SELECT c.id, c.displayName, c.role, c.active FROM c WHERE c.active = true OFFSET 0 LIMIT 30'))
+    safe(() => queryItems('users', 'SELECT c.id, c.displayName, c.role, c.active FROM c WHERE c.active = true OFFSET 0 LIMIT 30')),
+    safe(() => queryItems('quotes', 'SELECT * FROM c ORDER BY c.updatedAt DESC OFFSET 0 LIMIT 80')),
+    safe(() => queryItems('reminders', "SELECT * FROM c WHERE c.status = 'active' ORDER BY c.dueDate ASC OFFSET 0 LIMIT 60"))
   ]);
 
-  return { tasks, jobCards, clients, projects, campaigns, users };
+  return { tasks, jobCards, clients, projects, campaigns, users, quotes, reminders };
+}
+
+function activeDefaultAssignee(ctx) {
+  const activeUsers = (ctx.users || []).filter(u => u.active !== false);
+  const preferred = activeUsers.find(u => u.role === 'manager') || activeUsers[0];
+  return preferred?.id || null;
 }
 
 function buildHeuristicAdminItems(ctx) {
@@ -384,6 +392,209 @@ function matchCrmClient(invoiceClientName, crmClients) {
   }) || null;
 }
 
+function findClientForQuote(quote, crmClients) {
+  if (!quote) return null;
+  const byId = (crmClients || []).find(c => c.id === quote.clientId);
+  return byId || matchCrmClient(quote.clientName, crmClients);
+}
+
+function addDays(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function quoteFollowUpBody(quote, client) {
+  const contact = client?.contactName || 'there';
+  const total = Math.round(quote.grandTotal || 0).toLocaleString('en-ZA');
+  return `Hi ${contact},
+
+Just following up on ${quote.quoteNumber || 'the quote'} for ${quote.title || 'the work we discussed'}.
+
+The quoted amount is R${total} incl. VAT. Please let me know if you would like me to adjust the scope, clarify any line item, or plan the next step.
+
+Regards,
+Frank
+TECHSINNO (Pty) Ltd`;
+}
+
+function buildFollowUpEngineItems(ctx, defaultProvider) {
+  const items = [];
+  const defaultAssignee = activeDefaultAssignee(ctx);
+  const now = Date.now();
+
+  (ctx.quotes || []).forEach(q => {
+    const status = String(q.status || 'draft').toLowerCase();
+    if (['accepted', 'rejected'].includes(status)) return;
+
+    const age = daysSince(q.updatedAt || q.createdAt);
+    const validUntil = q.validUntil ? new Date(q.validUntil).getTime() : null;
+    const expiresSoon = validUntil && validUntil >= now && validUntil <= now + (5 * 86400000);
+    const expired = validUntil && validUntil < now;
+    const client = findClientForQuote(q, ctx.clients);
+    const to = client?.email || '';
+
+    if (status === 'sent' && (age >= 3 || expiresSoon || expired)) {
+      items.push(queueItem({
+        type: 'quote_followup',
+        source: 'followup_engine',
+        fingerprint: `quote_followup:${q.id}:${status}:${q.updatedAt || q.validUntil || q.createdAt}`,
+        relatedId: q.id,
+        priority: expired || expiresSoon ? 1 : 2,
+        flagType: 'follow_up',
+        title: `Follow up quote ${q.quoteNumber || ''} â€” ${q.clientName || 'client'}`,
+        reason: expired ? 'Quote expired' : expiresSoon ? 'Quote expiring soon' : `${age} days since sent`,
+        to,
+        provider: to && defaultProvider ? defaultProvider : '',
+        subject: `Follow-up: ${q.quoteNumber || 'TECHSINNO quote'}`,
+        body: quoteFollowUpBody(q, client),
+        painPoint: 'A sent quote can go cold without a clear next step.',
+        evidence: `Quote status ${status}; updated ${shortDate(q.updatedAt || q.createdAt)}; valid until ${shortDate(q.validUntil)}.`,
+        techsinnoSolution: 'Sales follow-up: ask whether scope, timing, or clarification is blocking the decision.',
+        nextStep: to ? 'Review and send the quote follow-up.' : 'Add the client email in CRM, then send the follow-up.'
+      }));
+      return;
+    }
+
+    if (status === 'draft' && age >= 2 && defaultAssignee) {
+      items.push(queueItem({
+        type: 'quote_followup',
+        source: 'followup_engine',
+        fingerprint: `quote_followup:draft:${q.id}:${q.updatedAt || q.createdAt}`,
+        relatedId: q.id,
+        priority: 2,
+        flagType: 'follow_up',
+        title: `Draft quote waiting: ${q.quoteNumber || q.title || q.clientName}`,
+        reason: `${age} days in draft`,
+        body: 'A quote draft has been sitting without being sent or closed. This is a useful place for the agent to keep sales admin moving.',
+        painPoint: 'Draft quotes do not create revenue until they are reviewed and sent.',
+        evidence: `Quote status draft; updated ${shortDate(q.updatedAt || q.createdAt)}.`,
+        techsinnoSolution: 'Admin follow-up: review scope, send it, or close it if no longer needed.',
+        nextStep: 'Review the quote page and decide whether to send or revise it.',
+        action: {
+          kind: 'create_task',
+          label: 'Create quote review task',
+          payload: {
+            title: `Review quote ${q.quoteNumber || q.title || q.clientName}`,
+            description: `AI follow-up engine found a draft quote waiting since ${shortDate(q.updatedAt || q.createdAt)}. Review, send, revise, or close it.`,
+            category: 'admin',
+            priority: 'medium',
+            assignedTo: defaultAssignee,
+            deadline: addDays(1)
+          }
+        }
+      }));
+    }
+  });
+
+  (ctx.reminders || []).forEach(r => {
+    if (!r.dueDate) return;
+    const due = new Date(r.dueDate).getTime();
+    if (!Number.isFinite(due) || due > now) return;
+    items.push(queueItem({
+      type: 'task_reminder',
+      source: 'followup_engine',
+      fingerprint: `task_reminder:${r.id}:${r.dueDate}`,
+      relatedId: r.id,
+      priority: r.priority === 'high' ? 1 : 2,
+      flagType: 'follow_up',
+      title: `Reminder due: ${r.title}`,
+      reason: `Due ${shortDate(r.dueDate)}`,
+      body: r.description || 'A reminder is due or overdue and needs a decision, reply, or follow-up.',
+      painPoint: 'A reminder has reached its due date and can disappear into admin noise.',
+      evidence: `Reminder due ${shortDate(r.dueDate)}; priority ${r.priority || 'medium'}.`,
+      techsinnoSolution: 'Secretary follow-up: either complete it, convert it to a task, or send the needed reply.',
+      nextStep: 'Decide whether this is done, still needed, or should become a task.'
+    }));
+  });
+
+  return items;
+}
+
+function buildSourcingItems(ctx) {
+  const defaultAssignee = activeDefaultAssignee(ctx);
+  if (!defaultAssignee) return [];
+
+  const leadCounts = {};
+  (ctx.clients || []).forEach(c => {
+    const industry = c.industry || 'other';
+    if (!['won', 'lost'].includes(String(c.status || '').toLowerCase())) {
+      leadCounts[industry] = (leadCounts[industry] || 0) + 1;
+    }
+  });
+
+  const sectors = [
+    {
+      industry: 'manufacturing',
+      title: 'Manufacturing maintenance prospects',
+      target: 'small and mid-size manufacturers in Blackheath, Epping, Killarney Gardens and Bellville South',
+      pain: 'production stoppages caused by failed PCBs, sensors, drives, and control panels',
+      service: 'PCB repair, diagnostics, PLC/SCADA support, and preventive maintenance checks',
+      firstStep: 'Build a 10-company prospect list and draft one problem-first intro email.'
+    },
+    {
+      industry: 'food_processing',
+      title: 'Food processing downtime prospects',
+      target: 'food processors, packhouses, cold storage and bottling operations in the Western Cape',
+      pain: 'downtime, temperature/control faults, and maintenance gaps during production runs',
+      service: 'diagnostics, control-panel review, IoT monitoring, and preventive maintenance',
+      firstStep: 'Find 8 operations managers and prepare a monitoring/downtime-risk outreach angle.'
+    },
+    {
+      industry: 'agriculture',
+      title: 'Agriculture automation prospects',
+      target: 'farms, packhouses, irrigation operators and agri-processing sites',
+      pain: 'pump/control faults, moisture/temperature blind spots, and unreliable field monitoring',
+      service: 'IoT monitoring, automation support, diagnostics, and preventive checks',
+      firstStep: 'Create a farm/packhouse target list and draft a site-walk-through offer.'
+    },
+    {
+      industry: 'logistics',
+      title: 'Logistics and warehouse prospects',
+      target: 'warehouses, fleet depots and cold-chain logistics operators',
+      pain: 'equipment faults, monitoring gaps, and preventable downtime in handling or storage systems',
+      service: 'diagnostics, IoT monitoring, control-panel review, and repair coordination',
+      firstStep: 'List 8 logistics sites and draft a short operational-risk email.'
+    }
+  ];
+
+  const weekStart = new Date();
+  weekStart.setHours(0, 0, 0, 0);
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+  const weekKey = weekStart.toISOString().slice(0, 10);
+
+  return sectors
+    .map(s => ({ ...s, activeLeads: leadCounts[s.industry] || 0 }))
+    .sort((a, b) => a.activeLeads - b.activeLeads)
+    .slice(0, 3)
+    .map((s, index) => queueItem({
+      type: 'sourcing_target',
+      source: 'sourcing_engine',
+      fingerprint: `sourcing_target:${weekKey}:${s.industry}`,
+      priority: s.activeLeads === 0 ? 2 : 3 + index,
+      flagType: 'opportunity',
+      title: s.title,
+      reason: s.activeLeads === 0 ? 'No active leads' : `${s.activeLeads} active lead(s)`,
+      body: `Target: ${s.target}.\n\nSourcing play: ${s.firstStep}`,
+      painPoint: s.pain,
+      evidence: `CRM currently shows ${s.activeLeads} active ${s.industry.replace('_', ' ')} lead(s).`,
+      techsinnoSolution: s.service,
+      nextStep: s.firstStep,
+      action: {
+        kind: 'create_task',
+        label: 'Create sourcing task',
+        payload: {
+          title: `Source ${s.title.toLowerCase()}`,
+          description: `AI sourcing engine target: ${s.target}. Pain to lead with: ${s.pain}. First step: ${s.firstStep}`,
+          category: 'admin',
+          priority: s.activeLeads === 0 ? 'high' : 'medium',
+          assignedTo: defaultAssignee,
+          deadline: addDays(2)
+        }
+      }
+    }));
+}
+
 function chaseEmailBody(inv, contactName) {
   return `Hi ${contactName || 'there'},
 
@@ -482,16 +693,17 @@ EMAILS:
 ${JSON.stringify(mail)}
 
 Return ONLY valid JSON array:
-[{"emailId":"id","provider":"zoho_mail|gmail|outlook","type":"email_reply","priority":1-5,"flagType":"lead|quote_request|urgent|follow_up","reason":"max 8 words","toAddress":"sender email","companyName":"company name/domain guess","contactName":"sender name if known","industry":"manufacturing|mining|agriculture|logistics|energy|food_processing|construction|other","painPoint":"specific likely or explicit operational problem","evidence":"email phrase/domain/sector used; say assumption if inferred","techsinnoSolution":"which TECHSINNO service fits and why","nextStep":"small practical next step to offer","subject":"specific Re: subject","body":"professional reply, 3-5 sentences, ending with Frank's signature"}]
+[{"emailId":"id","provider":"zoho_mail|gmail|outlook","type":"email_reply","inboxCategory":"rfq|customer_reply|complaint|supplier|payment|booking|admin|other","urgency":"urgent|today|this_week|low","priority":1-5,"flagType":"lead|quote_request|urgent|follow_up","reason":"max 8 words","toAddress":"sender email","companyName":"company name/domain guess","contactName":"sender name if known","industry":"manufacturing|mining|agriculture|logistics|energy|food_processing|construction|other","painPoint":"specific likely or explicit operational problem","evidence":"email phrase/domain/sector used; say assumption if inferred","techsinnoSolution":"which TECHSINNO service fits and why","nextStep":"small practical next step to offer","suggestedAction":"create_task|draft_reply|add_lead|watch_only","subject":"specific Re: subject","body":"professional reply, 3-5 sentences, ending with Frank's signature"}]
 Return [] if none qualify.` }]
           });
           parseJsonArray(r.content[0]?.text).forEach(item => {
             if (!existing.has(item.emailId)) {
               newItems.push({
-                id: uuidv4(), type: 'email_reply', source: item.provider || 'cloud_mail', emailId: item.emailId,
+                id: uuidv4(), type: 'email_reply', source: 'inbox_autopilot', emailId: item.emailId,
                 priority: item.priority || 3, flagType: item.flagType || 'lead', title: item.subject, reason: item.reason,
                 to: item.toAddress || '', subject: item.subject, body: item.body, provider: item.provider || 'zoho_mail',
                 companyName: item.companyName || '', contactName: item.contactName || '', industry: item.industry || 'other',
+                inboxCategory: item.inboxCategory || 'other', urgency: item.urgency || 'this_week', suggestedAction: item.suggestedAction || 'draft_reply',
                 painPoint: item.painPoint || '', evidence: item.evidence || '', techsinnoSolution: item.techsinnoSolution || '',
                 nextStep: item.nextStep || '', status: 'pending', createdAt: Date.now()
               });
@@ -520,7 +732,35 @@ Return [] if none qualify.` }]
         errors.push('Books: ' + (err.message || 'Zoho Books fetch failed'));
       }
 
-      // ---- 4. Admin legs: heuristics + Claude review -----------------------
+      // ---- 4. Follow-up engine: quotes + reminders ------------------------
+      try {
+        const followUpItems = buildFollowUpEngineItems(ctx, defaultProvider);
+        for (const item of followUpItems) {
+          const fp = itemFingerprint(item);
+          if (fp && !existing.has(fp)) {
+            newItems.push(item);
+            existing.add(fp);
+          }
+        }
+      } catch (err) {
+        errors.push('Follow-up engine: ' + err.message);
+      }
+
+      // ---- 5. Work sourcing engine: weekly target sectors ------------------
+      try {
+        const sourcingItems = buildSourcingItems(ctx);
+        for (const item of sourcingItems) {
+          const fp = itemFingerprint(item);
+          if (fp && !existing.has(fp)) {
+            newItems.push(item);
+            existing.add(fp);
+          }
+        }
+      } catch (err) {
+        errors.push('Sourcing engine: ' + err.message);
+      }
+
+      // ---- 6. Admin legs: heuristics + Claude review -----------------------
       try {
         const adminItems = buildHeuristicAdminItems(ctx);
         for (const item of adminItems) {
@@ -549,7 +789,7 @@ Return [] if none qualify.` }]
         errors.push('Admin review: ' + err.message);
       }
 
-      // ---- 5. Persist queue + scan telemetry -------------------------------
+      // ---- 7. Persist queue + scan telemetry -------------------------------
       const byType = {};
       newItems.forEach(i => { byType[i.type] = (byType[i.type] || 0) + 1; });
 

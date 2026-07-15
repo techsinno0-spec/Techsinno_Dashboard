@@ -5,8 +5,10 @@ let webAgentTab = 0;
 let webManualTasks = [];
 let webAgentJobCards = [];
 let webAgentChatMessages = [];
+let webAgentBriefingText = '';
 
 const WEB_AGENT_CHAT_KEY = 'techsinno_agent_chat_v1';
+const WEB_AGENT_BRIEFING_KEY = 'techsinno_agent_briefing_v1';
 
 const webAgentQuickPrompts = [
   { role: 'Secretary', icon: 'ti-mail-search', prompt: 'Act as my secretary. Triage my unread emails, identify urgent replies or RFQs, and draft any replies that should wait for my approval.' },
@@ -21,19 +23,19 @@ const webAgentTypeLabel = {
   email_reply:'Lead reply', cold_email:'Cold email', quote_draft:'Quote draft', linkedin_post:'LinkedIn post',
   opportunity:'Opportunity', task_reminder:'Task reminder', admin_task:'Admin task', admin_recommendation:'Admin recommendation',
   task_assignment:'Task assignment', job_abnormality:'Job abnormality', lead_followup:'Lead follow-up', service_suggestion:'Service suggestion',
-  invoice_overdue:'Overdue invoice'
+  invoice_overdue:'Overdue invoice', quote_followup:'Quote follow-up', sourcing_target:'Sourcing target'
 };
 const webAgentTypeIcon  = {
   email_reply:'ti-mail', cold_email:'ti-send', quote_draft:'ti-file-invoice', linkedin_post:'ti-brand-linkedin',
   opportunity:'ti-briefcase', task_reminder:'ti-bell', admin_task:'ti-clipboard-check', admin_recommendation:'ti-bulb',
   task_assignment:'ti-user-plus', job_abnormality:'ti-alert-triangle', lead_followup:'ti-phone-call', service_suggestion:'ti-sparkles',
-  invoice_overdue:'ti-cash'
+  invoice_overdue:'ti-cash', quote_followup:'ti-file-invoice', sourcing_target:'ti-target'
 };
 const webAgentTypeColor = {
   email_reply:'var(--brand-mid)', cold_email:'var(--accent)', quote_draft:'#3fb950', linkedin_post:'#0a66c2',
   opportunity:'#a371f7', task_reminder:'#f85149', admin_task:'#5fa8c4', admin_recommendation:'#a371f7',
   task_assignment:'#3fb950', job_abnormality:'#f85149', lead_followup:'var(--accent)', service_suggestion:'#ff8a65',
-  invoice_overdue:'#f85149'
+  invoice_overdue:'#f85149', quote_followup:'var(--accent)', sourcing_target:'#a371f7'
 };
 const webAgentFlagColor = { lead:'#3fb950', quote_request:'var(--accent)', urgent:'#f85149', blocked:'#f85149', follow_up:'var(--brand-mid)', outreach:'var(--accent)', content:'var(--brand-mid)', opportunity:'#a371f7', admin:'#5fa8c4' };
 
@@ -45,12 +47,14 @@ async function render_agent() {
       <div style="font-size:12px;color:var(--text2);margin-top:2px">Claude scans your emails and platforms, prepares everything — you just approve</div>
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn" id="webAgentStartDayBtn" style="display:flex;align-items:center;gap:6px" onclick="webAgentStartDay()"><i class="ti ti-sun"></i> Start my day</button>
       <button class="btn" id="webAgentScanBtn" style="display:flex;align-items:center;gap:6px" onclick="webAgentRunScan()"><i class="ti ti-refresh"></i> Run full scan</button>
       <button class="btn bo bsm" id="webAgentBriefingBtn" onclick="webAgentSendBriefing()" title="Compose and email the morning briefing now"><i class="ti ti-mail-forward"></i> Email briefing</button>
       <button class="btn bo bsm" style="color:#f85149;border-color:rgba(248,81,73,.3)" onclick="webAgentReset()" title="Clear cloud queue"><i class="ti ti-trash"></i> Reset all</button>
     </div>
   </div>
   ${webAgentRenderAssistantPanel()}
+  ${webAgentRenderBriefingPanel()}
   <div id="webAgentErrors"></div>
   <div class="g4" style="margin-bottom:14px">
     <div class="stat"><div class="slbl">Pending approval</div><div class="sval ca" id="webAgPending">—</div><div class="ssub">ready for your review</div></div>
@@ -83,7 +87,42 @@ async function render_agent() {
   if (intro) intro.textContent = 'Claude watches admin, tasks, jobs, money, leads and email, then proposes the next move for approval';
   const adminTab = document.getElementById('webAgTab2');
   if (adminTab) adminTab.textContent = 'Admin review';
+  webAgentApplyWorkflowChrome();
   await webAgentLoadQueue();
+}
+
+function webAgentSetStatCard(id, newId, label, sub) {
+  const value = document.getElementById(id);
+  if (!value) return;
+  value.id = newId;
+  const box = value.closest('.stat');
+  if (!box) return;
+  const labelEl = box.querySelector('.slbl');
+  const subEl = box.querySelector('.ssub');
+  if (labelEl) labelEl.textContent = label;
+  if (subEl) subEl.textContent = sub;
+}
+
+function webAgentSetTabLabel(id, html) {
+  const tab = document.getElementById(id);
+  if (tab) tab.innerHTML = html;
+}
+
+function webAgentApplyWorkflowChrome() {
+  webAgentSetStatCard('webAgEmails', 'webAgInbox', 'Inbox autopilot', 'triage + reply drafts');
+  webAgentSetStatCard('webAgPosts', 'webAgFollowups', 'Follow-ups', 'quotes + leads + invoices');
+  webAgentSetStatCard('webAgAdmin', 'webAgSourcing', 'Work sourcing', 'targets + outreach work');
+
+  webAgentSetTabLabel('webAgTab1', '<i class="ti ti-mail-search" style="font-size:11px;margin-right:3px"></i>Inbox autopilot');
+  webAgentSetTabLabel('webAgTab2', '<i class="ti ti-phone-call" style="font-size:11px;margin-right:3px"></i>Follow-ups');
+  webAgentSetTabLabel('webAgTab3', '<i class="ti ti-briefcase" style="font-size:11px;margin-right:3px"></i>Work sourcing');
+  webAgentSetTabLabel('webAgTab4', 'Admin review');
+  webAgentSetTabLabel('webAgTab5', '<i class="ti ti-checklist" style="font-size:11px;margin-right:3px"></i>My Tasks');
+  webAgentSetTabLabel('webAgTab6', '<i class="ti ti-file-description" style="font-size:11px;margin-right:3px"></i>Job Cards');
+
+  if (!document.getElementById('webAgTab7')) {
+    document.querySelector('#page-agent .wtabs')?.insertAdjacentHTML('beforeend', '<button class="wtab" id="webAgTab7" onclick="webAgentSetTab(7)">History</button>');
+  }
 }
 
 function webAgentFmtTime(ts) {
@@ -211,6 +250,82 @@ async function webAgentSendChat() {
   if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-send"></i> Ask'; }
 }
 
+function webAgentLoadBriefing() {
+  try {
+    webAgentBriefingText = localStorage.getItem(WEB_AGENT_BRIEFING_KEY) || '';
+  } catch {
+    webAgentBriefingText = '';
+  }
+}
+
+function webAgentSaveBriefing(text) {
+  webAgentBriefingText = text || '';
+  try { localStorage.setItem(WEB_AGENT_BRIEFING_KEY, webAgentBriefingText); } catch {}
+}
+
+function webAgentRenderBriefingPanel() {
+  webAgentLoadBriefing();
+  const hasBriefing = !!webAgentBriefingText;
+  return `<div class="card" style="padding:13px 14px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:9px">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:7px"><i class="ti ti-sun" style="color:var(--accent)"></i> Daily command briefing</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:3px;line-height:1.5">Start My Day runs the operations scan, refreshes inbox/follow-up/sourcing work, and drafts a live briefing preview before anything is emailed.</div>
+      </div>
+      <button class="btn bsm" id="webAgentStartDayPanelBtn" onclick="webAgentStartDay()"><i class="ti ti-player-play"></i> Start my day</button>
+    </div>
+    <div id="webAgentBriefingBox" style="background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;max-height:260px;overflow:auto">
+      ${hasBriefing
+        ? `<pre style="white-space:pre-wrap;margin:0;font-size:11px;line-height:1.55;color:var(--text2);font-family:'DM Mono',monospace">${escHtml(webAgentBriefingText)}</pre>`
+        : `<div style="font-size:12px;color:var(--text3);text-align:center;padding:12px">No briefing preview yet. Use Start My Day to generate one from live data.</div>`}
+    </div>
+  </div>`;
+}
+
+function webAgentRefreshBriefingBox(loadingText) {
+  const box = document.getElementById('webAgentBriefingBox');
+  if (!box) return;
+  if (loadingText) {
+    box.innerHTML = `<div style="display:flex;align-items:center;gap:8px;color:var(--text3);font-size:12px;padding:10px"><div class="spin" style="width:13px;height:13px;border-width:2px"></div>${escHtml(loadingText)}</div>`;
+    return;
+  }
+  box.innerHTML = webAgentBriefingText
+    ? `<pre style="white-space:pre-wrap;margin:0;font-size:11px;line-height:1.55;color:var(--text2);font-family:'DM Mono',monospace">${escHtml(webAgentBriefingText)}</pre>`
+    : `<div style="font-size:12px;color:var(--text3);text-align:center;padding:12px">No briefing preview yet. Use Start My Day to generate one from live data.</div>`;
+}
+
+async function webAgentStartDay() {
+  const buttons = [document.getElementById('webAgentStartDayBtn'), document.getElementById('webAgentStartDayPanelBtn')].filter(Boolean);
+  buttons.forEach(btn => { btn.disabled = true; btn.innerHTML = '<div class="spin" style="width:12px;height:12px;border-width:2px"></div> Starting'; });
+  webAgentRefreshBriefingBox('Running operations scan...');
+  ntf('Starting daily command scan...');
+
+  try {
+    const scan = await apiPost('/agent/scan', {});
+    if (scan && scan.error) {
+      webAgentRefreshBriefingBox('');
+      ntf(scan.error);
+      return;
+    }
+    await webAgentLoadQueue();
+    webAgentRefreshBriefingBox('Composing live briefing preview...');
+    const data = await apiPost('/agent/briefing', { dryRun: true });
+    if (data && data.error) {
+      webAgentRefreshBriefingBox('');
+      ntf(data.error);
+      return;
+    }
+    webAgentSaveBriefing(data?.briefing || '');
+    webAgentRefreshBriefingBox();
+    ntf(`Daily briefing ready · ${scan?.newItems || 0} new queue item(s)`);
+  } catch {
+    webAgentRefreshBriefingBox('');
+    ntf('Start My Day failed');
+  } finally {
+    buttons.forEach(btn => { btn.disabled = false; btn.innerHTML = btn.id === 'webAgentStartDayPanelBtn' ? '<i class="ti ti-player-play"></i> Start my day' : '<i class="ti ti-sun"></i> Start my day'; });
+  }
+}
+
 async function webAgentLoadQueue() {
   try {
     const data = await apiGet('/agent/queue');
@@ -242,19 +357,19 @@ function webAgentRenderErrors() {
 
 function webAgentUpdateStats() {
   const pending = webAgentQueue.filter(i => i.status === 'pending');
-  const emails = pending.filter(i => ['email_reply','cold_email','quote_draft','invoice_overdue'].includes(i.type));
-  const posts = pending.filter(i => i.type === 'linkedin_post');
-  const admin = pending.filter(i => ['admin_task','admin_recommendation','task_assignment','job_abnormality','lead_followup','service_suggestion'].includes(i.type));
+  const inbox = pending.filter(i => i.source === 'inbox_autopilot' || (i.type === 'email_reply' && i.emailId));
+  const followups = pending.filter(i => ['lead_followup','quote_followup','invoice_overdue','task_reminder'].includes(i.type));
+  const sourcing = pending.filter(i => i.source === 'sourcing_engine' || ['sourcing_target','opportunity','cold_email'].includes(i.type));
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
   set('webAgPending', pending.length);
-  set('webAgEmails', emails.length);
-  set('webAgPosts', posts.length);
-  set('webAgAdmin', admin.length);
+  set('webAgInbox', inbox.length);
+  set('webAgFollowups', followups.length);
+  set('webAgSourcing', sourcing.length);
 }
 
 function webAgentSetTab(tab) {
   webAgentTab = tab;
-  [0,1,2,3,4,5,6].forEach(i => document.getElementById('webAgTab' + i)?.classList.toggle('active', i === tab));
+  [0,1,2,3,4,5,6,7].forEach(i => document.getElementById('webAgTab' + i)?.classList.toggle('active', i === tab));
   webAgentRenderTab();
 }
 
@@ -262,11 +377,12 @@ function webAgentRenderTab() {
   const el = document.getElementById('webAgentTabContent');
   if (!el) return;
   if (webAgentTab === 0) el.innerHTML = webAgentRenderPending();
-  else if (webAgentTab === 1) el.innerHTML = webAgentRenderOpportunities();
-  else if (webAgentTab === 2) el.innerHTML = webAgentRenderAdminReview();
-  else if (webAgentTab === 3) el.innerHTML = webAgentRenderWebsiteJobs();
-  else if (webAgentTab === 4) { el.innerHTML = '<div class="card"><div class="spin"></div> Loading tasks...</div>'; webAgentRenderMyTasks(el); }
-  else if (webAgentTab === 5) { el.innerHTML = '<div class="card"><div class="spin"></div> Loading job cards...</div>'; webAgentRenderJobCards(el); }
+  else if (webAgentTab === 1) el.innerHTML = webAgentRenderInboxAutopilot();
+  else if (webAgentTab === 2) el.innerHTML = webAgentRenderFollowUps();
+  else if (webAgentTab === 3) el.innerHTML = webAgentRenderWorkSourcing();
+  else if (webAgentTab === 4) el.innerHTML = webAgentRenderAdminReview();
+  else if (webAgentTab === 5) { el.innerHTML = '<div class="card"><div class="spin"></div> Loading tasks...</div>'; webAgentRenderMyTasks(el); }
+  else if (webAgentTab === 6) { el.innerHTML = '<div class="card"><div class="spin"></div> Loading job cards...</div>'; webAgentRenderJobCards(el); }
   else el.innerHTML = webAgentRenderHistory();
 }
 
@@ -288,8 +404,15 @@ function webAgentRenderItem(item) {
   const flagColor = webAgentFlagColor[item.flagType] || 'var(--text3)';
   const preview = (item.body || '').slice(0, 180).replace(/\n/g, ' ');
   const actionBtn = item.action && item.action.kind ? `<button class="btn bsm" onclick="webAgentRunAction('${item.id}')"><i class="ti ti-player-play"></i> ${escHtml(item.action.label || 'Approve action')}</button>` : '';
-  const sendable = ['email_reply', 'cold_email', 'invoice_overdue'].includes(item.type) && item.to && item.provider;
+  const sendable = ['email_reply', 'cold_email', 'invoice_overdue', 'quote_followup'].includes(item.type) && item.to && item.provider;
   const sendBtn = sendable ? `<button class="btn bsm" onclick="webAgentReviewSend('${item.id}')"><i class="ti ti-send"></i> Review &amp; send</button>` : '';
+  const meta = [
+    item.inboxCategory ? `Inbox: ${item.inboxCategory}` : '',
+    item.urgency ? `Urgency: ${item.urgency}` : '',
+    item.suggestedAction ? `Action: ${item.suggestedAction}` : '',
+    item.source ? `Source: ${item.source}` : ''
+  ].filter(Boolean);
+  const metaHtml = meta.length ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin:5px 0">${meta.map(m => `<span style="font-size:9px;color:var(--text3);border:1px solid var(--border);border-radius:999px;padding:2px 6px;font-family:'DM Mono',monospace">${escHtml(m)}</span>`).join('')}</div>` : '';
   const diagnostic = (item.painPoint || item.evidence || item.techsinnoSolution || item.nextStep) ? `<div style="background:rgba(95,168,196,.08);border:1px solid rgba(95,168,196,.18);border-radius:var(--radius-sm);padding:8px 10px;margin:7px 0">
     <div style="font-size:10px;color:var(--brand-mid);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Problem spotted</div>
     ${item.painPoint ? `<div style="font-size:11px;color:var(--text);margin-bottom:3px"><strong>Pain:</strong> ${escHtml(item.painPoint)}</div>` : ''}
@@ -306,6 +429,7 @@ function webAgentRenderItem(item) {
       <button class="btn bsm bo" onclick="webAgentDismiss('${item.id}')">Skip</button>
     </div>
     ${item.to ? `<div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:5px">To: ${escHtml(item.to)}</div>` : ''}
+    ${metaHtml}
     ${diagnostic}
     <div style="font-size:11px;color:var(--text2);line-height:1.5;margin:6px 0 9px;background:var(--bg4);padding:7px 9px;border-radius:var(--radius-sm)">${escHtml(preview)}${item.body && item.body.length > 180 ? '…' : ''}</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -377,6 +501,34 @@ async function webAgentSendEmail(id) {
     setErr('Failed to send email');
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-send"></i> Send now'; }
   }
+}
+
+function webAgentRenderInboxAutopilot() {
+  const items = webAgentQueue
+    .filter(i => (i.source === 'inbox_autopilot' || (i.type === 'email_reply' && i.emailId)) && i.status !== 'dismissed')
+    .sort((a,b) => (a.priority || 9) - (b.priority || 9));
+  if (!items.length) return '<div class="card" style="text-align:center;padding:30px;color:var(--text2)">No inbox autopilot items yet.<div style="font-size:11px;color:var(--text3);margin-top:6px">Run Start My Day or Run full scan to classify unread mail, spot RFQs, and draft replies for approval.</div></div>';
+  return items.map(webAgentRenderItem).join('');
+}
+
+function webAgentRenderFollowUps() {
+  const followTypes = ['lead_followup','quote_followup','invoice_overdue','task_reminder'];
+  const items = webAgentQueue
+    .filter(i => followTypes.includes(i.type) && i.status !== 'dismissed')
+    .sort((a,b) => (a.priority || 9) - (b.priority || 9));
+  if (!items.length) return '<div class="card" style="text-align:center;padding:30px;color:var(--text2)">No follow-ups waiting.<div style="font-size:11px;color:var(--text3);margin-top:6px">The engine watches CRM follow-up dates, stale leads, sent quotes, overdue invoices, and due reminders.</div></div>';
+  return items.map(webAgentRenderItem).join('');
+}
+
+function webAgentRenderWorkSourcing() {
+  const items = webAgentQueue
+    .filter(i => (i.source === 'sourcing_engine' || ['sourcing_target','opportunity','cold_email'].includes(i.type)) && i.status !== 'dismissed')
+    .sort((a,b) => (a.priority || 9) - (b.priority || 9));
+  if (!items.length) return '<div class="card" style="text-align:center;padding:30px;color:var(--text2)">No sourcing targets yet.<div style="font-size:11px;color:var(--text3);margin-top:6px">Run Start My Day to generate weekly prospecting targets from your CRM gaps and TECHSINNO service fit.</div></div>';
+  return `<div class="card" style="padding:10px 12px;margin-bottom:10px">
+    <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px"><i class="ti ti-briefcase"></i> Work sourcing board</div>
+    <div style="font-size:11px;color:var(--text3);line-height:1.5">These are sourcing plays, not scraped leads yet. They create prospect-list tasks and outreach angles from your CRM gaps. External tender/search feeds can be added later.</div>
+  </div>${items.map(webAgentRenderItem).join('')}`;
 }
 
 function webAgentRenderOpportunities() {
@@ -530,6 +682,14 @@ async function webAgentDismiss(id) {
   webAgentRenderTab();
 }
 
+async function webAgentMarkActionApproved(id, message) {
+  webAgentQueue = webAgentQueue.map(i => i.id === id ? { ...i, status: 'approved', approvedAt: Date.now() } : i);
+  await apiPut('/agent/queue', { queue: webAgentQueue, lastScan: webAgentLastScan });
+  ntf(message);
+  webAgentUpdateStats();
+  webAgentRenderTab();
+}
+
 async function webAgentRunAction(id) {
   const item = webAgentQueue.find(i => i.id === id);
   if (!item || !item.action || !item.action.kind) return;
@@ -547,11 +707,35 @@ async function webAgentRunAction(id) {
         ntf(data.error);
         return;
       }
-      webAgentQueue = webAgentQueue.map(i => i.id === id ? { ...i, status: 'approved', approvedAt: Date.now() } : i);
-      await apiPut('/agent/queue', { queue: webAgentQueue, lastScan: webAgentLastScan });
-      ntf('Task created from AI recommendation');
-      webAgentUpdateStats();
-      webAgentRenderTab();
+      await webAgentMarkActionApproved(id, 'Task created from AI recommendation');
+      return;
+    }
+    if (item.action.kind === 'create_client') {
+      const payload = item.action.payload || {};
+      if (!payload.companyName) {
+        ntf('AI action is missing company name');
+        return;
+      }
+      const data = await apiPost('/clients', payload);
+      if (data && data.error) {
+        ntf(data.error);
+        return;
+      }
+      await webAgentMarkActionApproved(id, 'Lead created from AI recommendation');
+      return;
+    }
+    if (item.action.kind === 'create_reminder') {
+      const payload = item.action.payload || {};
+      if (!payload.title || !payload.dueDate) {
+        ntf('AI action is missing reminder title or due date');
+        return;
+      }
+      const data = await apiPost('/reminders', payload);
+      if (data && data.error) {
+        ntf(data.error);
+        return;
+      }
+      await webAgentMarkActionApproved(id, 'Reminder created from AI recommendation');
       return;
     }
     ntf('This AI action is not supported yet');
@@ -599,7 +783,11 @@ async function webAgentSendBriefing() {
   try {
     const data = await apiPost('/agent/briefing', {});
     if (data && data.error) ntf(data.error);
-    else ntf(`Briefing sent to ${data.sentTo} via ${data.provider}`);
+    else {
+      webAgentSaveBriefing(data?.briefing || webAgentBriefingText);
+      webAgentRefreshBriefingBox();
+      ntf(`Briefing sent to ${data.sentTo} via ${data.provider}`);
+    }
   } catch {
     ntf('Briefing failed');
   }
