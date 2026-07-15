@@ -1,5 +1,6 @@
 let webAgentQueue = [];
 let webAgentLastScan = null;
+let webAgentLastErrors = [];
 let webAgentTab = 0;
 let webManualTasks = [];
 let webAgentJobCards = [];
@@ -7,17 +8,20 @@ let webAgentJobCards = [];
 const webAgentTypeLabel = {
   email_reply:'Lead reply', cold_email:'Cold email', quote_draft:'Quote draft', linkedin_post:'LinkedIn post',
   opportunity:'Opportunity', task_reminder:'Task reminder', admin_task:'Admin task', admin_recommendation:'Admin recommendation',
-  task_assignment:'Task assignment', job_abnormality:'Job abnormality', lead_followup:'Lead follow-up', service_suggestion:'Service suggestion'
+  task_assignment:'Task assignment', job_abnormality:'Job abnormality', lead_followup:'Lead follow-up', service_suggestion:'Service suggestion',
+  invoice_overdue:'Overdue invoice'
 };
 const webAgentTypeIcon  = {
   email_reply:'ti-mail', cold_email:'ti-send', quote_draft:'ti-file-invoice', linkedin_post:'ti-brand-linkedin',
   opportunity:'ti-briefcase', task_reminder:'ti-bell', admin_task:'ti-clipboard-check', admin_recommendation:'ti-bulb',
-  task_assignment:'ti-user-plus', job_abnormality:'ti-alert-triangle', lead_followup:'ti-phone-call', service_suggestion:'ti-sparkles'
+  task_assignment:'ti-user-plus', job_abnormality:'ti-alert-triangle', lead_followup:'ti-phone-call', service_suggestion:'ti-sparkles',
+  invoice_overdue:'ti-cash'
 };
 const webAgentTypeColor = {
   email_reply:'var(--brand-mid)', cold_email:'var(--accent)', quote_draft:'#3fb950', linkedin_post:'#0a66c2',
   opportunity:'#a371f7', task_reminder:'#f85149', admin_task:'#5fa8c4', admin_recommendation:'#a371f7',
-  task_assignment:'#3fb950', job_abnormality:'#f85149', lead_followup:'var(--accent)', service_suggestion:'#ff8a65'
+  task_assignment:'#3fb950', job_abnormality:'#f85149', lead_followup:'var(--accent)', service_suggestion:'#ff8a65',
+  invoice_overdue:'#f85149'
 };
 const webAgentFlagColor = { lead:'#3fb950', quote_request:'var(--accent)', urgent:'#f85149', blocked:'#f85149', follow_up:'var(--brand-mid)', outreach:'var(--accent)', content:'var(--brand-mid)', opportunity:'#a371f7', admin:'#5fa8c4' };
 
@@ -30,12 +34,14 @@ async function render_agent() {
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
       <button class="btn" id="webAgentScanBtn" style="display:flex;align-items:center;gap:6px" onclick="webAgentRunScan()"><i class="ti ti-refresh"></i> Run full scan</button>
+      <button class="btn bo bsm" id="webAgentBriefingBtn" onclick="webAgentSendBriefing()" title="Compose and email the morning briefing now"><i class="ti ti-mail-forward"></i> Email briefing</button>
       <button class="btn bo bsm" style="color:#f85149;border-color:rgba(248,81,73,.3)" onclick="webAgentReset()" title="Clear cloud queue"><i class="ti ti-trash"></i> Reset all</button>
     </div>
   </div>
+  <div id="webAgentErrors"></div>
   <div class="g4" style="margin-bottom:14px">
     <div class="stat"><div class="slbl">Pending approval</div><div class="sval ca" id="webAgPending">—</div><div class="ssub">ready for your review</div></div>
-    <div class="stat"><div class="slbl">Emails prepared</div><div class="sval cb" id="webAgEmails">—</div><div class="ssub">replies + cold outreach</div></div>
+    <div class="stat"><div class="slbl">Emails prepared</div><div class="sval cb" id="webAgEmails">—</div><div class="ssub">replies + chasers + outreach</div></div>
     <div class="stat"><div class="slbl">LinkedIn posts</div><div class="sval cg" id="webAgPosts">—</div><div class="ssub">ready to publish</div></div>
     <div class="stat"><div class="slbl">Opportunities</div><div class="sval" id="webAgOpps">—</div><div class="ssub">Upwork + platforms</div></div>
   </div>
@@ -61,7 +67,7 @@ async function render_agent() {
     }
   }
   const intro = document.getElementById('webAgentLastScan')?.nextElementSibling;
-  if (intro) intro.textContent = 'Claude watches admin, tasks, jobs, leads and platforms, then proposes the next move for approval';
+  if (intro) intro.textContent = 'Claude watches admin, tasks, jobs, money, leads and email, then proposes the next move for approval';
   const adminTab = document.getElementById('webAgTab2');
   if (adminTab) adminTab.textContent = 'Admin review';
   await webAgentLoadQueue();
@@ -77,19 +83,33 @@ async function webAgentLoadQueue() {
     const data = await apiGet('/agent/queue');
     webAgentQueue = (data && data.queue) || [];
     webAgentLastScan = data && data.lastScan;
+    webAgentLastErrors = (data && data.lastErrors) || [];
   } catch {
     webAgentQueue = [];
     webAgentLastScan = null;
+    webAgentLastErrors = [];
   }
   const last = document.getElementById('webAgentLastScan');
   if (last) last.textContent = webAgentLastScan ? 'Last scan: ' + webAgentFmtTime(webAgentLastScan) : 'Never scanned — run full scan in Electron to start';
+  webAgentRenderErrors();
   webAgentUpdateStats();
   webAgentRenderTab();
 }
 
+function webAgentRenderErrors() {
+  const el = document.getElementById('webAgentErrors');
+  if (!el) return;
+  if (!webAgentLastErrors.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="card" style="border:1px solid rgba(248,81,73,.35);background:rgba(248,81,73,.06);padding:10px 12px;margin-bottom:12px">
+    <div style="font-size:11px;font-weight:600;color:#f85149;margin-bottom:5px"><i class="ti ti-alert-triangle"></i> Last scan reported ${webAgentLastErrors.length} problem(s)</div>
+    ${webAgentLastErrors.map(e => `<div style="font-size:11px;color:var(--text2);line-height:1.5">• ${escHtml(e)}</div>`).join('')}
+    <div style="font-size:10px;color:var(--text3);margin-top:5px">These sources returned nothing this scan — fix the connection in Settings, then run a new scan.</div>
+  </div>`;
+}
+
 function webAgentUpdateStats() {
   const pending = webAgentQueue.filter(i => i.status === 'pending');
-  const emails = pending.filter(i => ['email_reply','cold_email','quote_draft'].includes(i.type));
+  const emails = pending.filter(i => ['email_reply','cold_email','quote_draft','invoice_overdue'].includes(i.type));
   const posts = pending.filter(i => i.type === 'linkedin_post');
   const admin = pending.filter(i => ['admin_task','admin_recommendation','task_assignment','job_abnormality','lead_followup','service_suggestion'].includes(i.type));
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
@@ -119,7 +139,7 @@ function webAgentRenderTab() {
 
 function webAgentRenderPending() {
   const items = webAgentQueue.filter(i => i.status === 'pending').sort((a,b) => (a.priority || 9) - (b.priority || 9));
-  if (!items.length) return `<div class="card" style="text-align:center;padding:30px"><i class="ti ti-check" style="font-size:32px;color:#3fb950;display:block;margin-bottom:8px"></i><div style="font-size:13px;color:var(--text2)">Queue is empty.</div><div style="font-size:11px;color:var(--text3);margin-top:4px">Run full scan in Electron to find leads, prepare emails and LinkedIn posts.</div></div>`;
+  if (!items.length) return `<div class="card" style="text-align:center;padding:30px"><i class="ti ti-check" style="font-size:32px;color:#3fb950;display:block;margin-bottom:8px"></i><div style="font-size:13px;color:var(--text2)">Queue is empty.</div><div style="font-size:11px;color:var(--text3);margin-top:4px">Run full scan to find leads, prepare emails, chase invoices and review admin.</div></div>`;
   const groups = {};
   items.forEach(i => { if (!groups[i.type]) groups[i.type] = []; groups[i.type].push(i); });
   return Object.entries(groups).map(([type, list]) => `<div style="margin-bottom:16px">
@@ -135,7 +155,7 @@ function webAgentRenderItem(item) {
   const flagColor = webAgentFlagColor[item.flagType] || 'var(--text3)';
   const preview = (item.body || '').slice(0, 180).replace(/\n/g, ' ');
   const actionBtn = item.action && item.action.kind ? `<button class="btn bsm" onclick="webAgentRunAction('${item.id}')"><i class="ti ti-player-play"></i> ${escHtml(item.action.label || 'Approve action')}</button>` : '';
-  const sendable = ['email_reply', 'cold_email'].includes(item.type) && item.to && item.provider;
+  const sendable = ['email_reply', 'cold_email', 'invoice_overdue'].includes(item.type) && item.to && item.provider;
   const sendBtn = sendable ? `<button class="btn bsm" onclick="webAgentReviewSend('${item.id}')"><i class="ti ti-send"></i> Review &amp; send</button>` : '';
   const diagnostic = (item.painPoint || item.evidence || item.techsinnoSolution || item.nextStep) ? `<div style="background:rgba(95,168,196,.08);border:1px solid rgba(95,168,196,.18);border-radius:var(--radius-sm);padding:8px 10px;margin:7px 0">
     <div style="font-size:10px;color:var(--brand-mid);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Problem spotted</div>
@@ -228,16 +248,16 @@ async function webAgentSendEmail(id) {
 
 function webAgentRenderOpportunities() {
   const opps = webAgentQueue.filter(i => i.type === 'opportunity' && i.status !== 'dismissed');
-  if (!opps.length) return '<div class="card" style="text-align:center;padding:30px;color:var(--text2)">No opportunities yet.</div>';
+  if (!opps.length) return '<div class="card" style="text-align:center;padding:30px;color:var(--text2)">No opportunities yet.<div style="font-size:11px;color:var(--text3);margin-top:6px">Note: Upwork discontinued its public RSS job feeds in Aug 2024, so the old Upwork leg has been retired. A rebuilt sourcing leg (tenders + search) is planned.</div></div>';
   return opps.map(webAgentRenderItem).join('');
 }
 
 function webAgentRenderAdminReview() {
-  const adminTypes = ['admin_task','admin_recommendation','task_assignment','job_abnormality','lead_followup','service_suggestion'];
+  const adminTypes = ['admin_task','admin_recommendation','task_assignment','job_abnormality','lead_followup','service_suggestion','invoice_overdue'];
   const items = webAgentQueue
     .filter(i => adminTypes.includes(i.type) && i.status !== 'dismissed')
     .sort((a,b) => (a.priority || 9) - (b.priority || 9));
-  if (!items.length) return '<div class="card" style="text-align:center;padding:30px;color:var(--text2)">No admin alerts yet. Run a full scan to review tasks, jobs, CRM and next actions.</div>';
+  if (!items.length) return '<div class="card" style="text-align:center;padding:30px;color:var(--text2)">No admin alerts yet. Run a full scan to review tasks, jobs, CRM, invoices and next actions.</div>';
   return items.map(webAgentRenderItem).join('');
 }
 
@@ -430,10 +450,25 @@ async function webAgentRunScan() {
   try {
     const data = await apiPost('/agent/scan', {});
     if (data && data.error) ntf(data.error);
-    else ntf(`Scan complete · ${data.newItems || 0} new item(s)`);
+    else ntf(`Scan complete · ${data.newItems || 0} new item(s)${(data.errors && data.errors.length) ? ` · ${data.errors.length} warning(s)` : ''}`);
     await webAgentLoadQueue();
   } catch {
     ntf('Cloud scan failed');
   }
   if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-refresh"></i> Run full scan'; }
+}
+
+async function webAgentSendBriefing() {
+  if (!confirm('Compose and email the briefing now?')) return;
+  const btn = document.getElementById('webAgentBriefingBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spin" style="width:12px;height:12px;border-width:2px"></div> Building...'; }
+  ntf('Composing briefing...');
+  try {
+    const data = await apiPost('/agent/briefing', {});
+    if (data && data.error) ntf(data.error);
+    else ntf(`Briefing sent to ${data.sentTo} via ${data.provider}`);
+  } catch {
+    ntf('Briefing failed');
+  }
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-mail-forward"></i> Email briefing'; }
 }
