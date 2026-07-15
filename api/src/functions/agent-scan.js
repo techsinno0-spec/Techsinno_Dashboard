@@ -1,11 +1,27 @@
 const { app } = require('@azure/functions');
-const axios = require('axios');
 const Anthropic = require('@anthropic-ai/sdk');
 const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const { getItem, createItem, replaceItem, queryItems } = require('../../shared/cosmos');
 const { authenticate, jsonResponse, unauthorized, forbidden } = require('../../shared/auth');
-const { getEmailConfig, gmailGet, msGet, zohoGet } = require('../../shared/email');
+const { getMailSamplesWithError, getDefaultProvider } = require('../../shared/mail-scan');
+const { getBooksSnapshot } = require('../../shared/zoho-books');
+
+// ============================================================================
+// Scheduled agent scan.
+//
+// Changes in this version:
+//  - Mail sampling moved to shared/mail-scan.js (reused by chat tools and the
+//    morning briefing). Mail fetch failures are now REPORTED in `errors`
+//    instead of silently returning nothing.
+//  - Upwork RSS leg removed: Upwork discontinued public RSS feeds on
+//    20 Aug 2024, so that code has been returning zero results silently.
+//    A proper sourcing rebuild (eTenders / search-based) is planned.
+//  - New bookkeeper watchdog: overdue invoices from Zoho Books become
+//    approval-queue items with a ready-to-send payment chaser.
+//  - The queue document now stores lastErrors + lastScanSummary so the
+//    dashboard can show what each scan actually did.
+// ============================================================================
 
 const AGENT_QUEUE_ID = 'agent_queue';
 
@@ -350,177 +366,70 @@ If no action is needed, return [].` }]
   }));
 }
 
-const ZOHO_AGENT_SCAN_LIMIT = 40;
+// ---------------------------------------------------------------------------
+// Bookkeeper watchdog: overdue Zoho Books invoices → payment-chaser drafts.
+// ---------------------------------------------------------------------------
 
-function zohoMessageTime(message) {
-  const raw =
-    message.receivedTime ||
-    message.sentDateInGMT ||
-    message.date ||
-    message.receivedDateTime ||
-    message.sentDateTime ||
-    0;
-  const n = Number(raw);
-  if (Number.isFinite(n) && n > 0) return n;
-  const parsed = Date.parse(raw);
-  return Number.isFinite(parsed) ? parsed : 0;
+function normalizeName(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
-function newestZohoFirst(a, b) {
-  return zohoMessageTime(b) - zohoMessageTime(a);
+function matchCrmClient(invoiceClientName, crmClients) {
+  const target = normalizeName(invoiceClientName);
+  if (!target) return null;
+  return (crmClients || []).find(c => {
+    const crm = normalizeName(c.companyName);
+    if (!crm) return false;
+    return crm === target || crm.includes(target) || target.includes(crm);
+  }) || null;
 }
 
-function extractAddressParts(value) {
-  if (!value) return [];
-  if (typeof value === 'string' || typeof value === 'number') return [String(value)];
-  if (Array.isArray(value)) return value.flatMap(extractAddressParts);
-  if (typeof value === 'object') {
-    return [
-      value.address,
-      value.email,
-      value.emailAddress,
-      value.mail,
-      value.name,
-      value.displayName,
-      value.fromAddress,
-      value.toAddress
-    ].flatMap(extractAddressParts);
-  }
-  return [];
+function chaseEmailBody(inv, contactName) {
+  return `Hi ${contactName || 'there'},
+
+Just a friendly reminder that invoice ${inv.number} for R${Math.round(inv.balance).toLocaleString('en-ZA')} was due on ${shortDate(inv.due)} and is now ${inv.daysOverdue} day${inv.daysOverdue === 1 ? '' : 's'} outstanding.
+
+Could you let me know when we can expect payment, or whether anything on the invoice needs clarifying from our side? If payment has already been made, please ignore this note — and thank you.
+
+Regards,
+Frank
+TECHSINNO (Pty) Ltd`;
 }
 
-function zohoAddressText(...values) {
-  return values.flatMap(extractAddressParts).filter(Boolean).join(', ');
-}
+function buildBookkeeperItems(books, ctx, defaultProvider) {
+  if (!books || !books.overdueInvoices?.length) return [];
+  const items = [];
 
-function findZohoInboxFolder(folders) {
-  const list = Array.isArray(folders?.data) ? folders.data : [];
-  return list.find(f => {
-    const name = String(f.folderName || '').toLowerCase();
-    const path = String(f.path || '').toLowerCase();
-    const type = String(f.folderType || '').toLowerCase();
-    return name === 'inbox' || path === 'inbox' || type === 'inbox';
+  books.overdueInvoices.slice(0, 8).forEach(inv => {
+    const crm = matchCrmClient(inv.client, ctx.clients);
+    const to = crm?.email || '';
+    items.push(queueItem({
+      type: 'invoice_overdue',
+      source: 'books_watchdog',
+      fingerprint: `invoice_overdue:${inv.number}:${inv.due}`,
+      priority: inv.daysOverdue >= 14 ? 1 : 2,
+      flagType: 'urgent',
+      title: `Overdue invoice ${inv.number} — ${inv.client}`,
+      reason: `R${Math.round(inv.balance).toLocaleString('en-ZA')} · ${inv.daysOverdue}d overdue`,
+      to,
+      provider: to && defaultProvider ? defaultProvider : '',
+      subject: `Payment follow-up: Invoice ${inv.number}`,
+      body: chaseEmailBody(inv, crm?.contactName),
+      painPoint: 'Cash is stuck in an unpaid invoice past its due date.',
+      evidence: `Zoho Books: invoice ${inv.number} due ${shortDate(inv.due)}, balance R${Math.round(inv.balance).toLocaleString('en-ZA')}.`,
+      techsinnoSolution: 'Bookkeeper follow-up: a polite, specific payment reminder with a clear ask.',
+      nextStep: to
+        ? 'Review and send the payment chaser, or call the client.'
+        : `No email on file for "${inv.client}" in the CRM — add the client's email, or copy this text and send it manually.`
+    }));
   });
+
+  return items;
 }
 
-async function getZohoMailAccounts(cfg) {
-  try {
-    const data = await zohoGet(cfg, '/accounts');
-    const accounts = Array.isArray(data.data) ? data.data.filter(a => a?.accountId) : [];
-    if (accounts.length) return accounts;
-  } catch {}
-
-  if (Array.isArray(cfg.accounts) && cfg.accounts.some(a => a?.accountId)) {
-    return cfg.accounts.filter(a => a?.accountId);
-  }
-
-  return [{ accountId: cfg.accountId, primaryEmailAddress: cfg.email }].filter(a => a.accountId);
-}
-
-async function fetchZohoAccountMessages(cfg, accountId) {
-  let folderId = '';
-  try {
-    const folders = await zohoGet(cfg, `/accounts/${accountId}/folders`);
-    folderId = findZohoInboxFolder(folders)?.folderId || '';
-  } catch {}
-
-  const sources = folderId
-    ? [
-        { path: `/accounts/${accountId}/folders/${folderId}/messages/view`, params: {} },
-        { path: `/accounts/${accountId}/messages/view`, params: { folderId } }
-      ]
-    : [{ path: `/accounts/${accountId}/messages/view`, params: {} }];
-
-  const messages = [];
-  const seen = new Set();
-
-  for (const source of sources) {
-    try {
-      const data = await zohoGet(cfg, source.path, { ...source.params, limit: ZOHO_AGENT_SCAN_LIMIT });
-      (data.data || []).forEach(message => {
-        const id = message.messageId || message.mailId || message.id;
-        if (!id || seen.has(id)) return;
-        seen.add(id);
-        messages.push({ ...message, accountId, folderId: message.folderId || folderId });
-      });
-    } catch {}
-  }
-
-  return messages;
-}
-
-async function getMailSamples(provider) {
-  try {
-    if (provider === 'zoho_mail') {
-      const cfg = await getEmailConfig('zoho_mail');
-      if (!cfg?.accessToken || !cfg?.accountId) return [];
-      const accounts = await getZohoMailAccounts(cfg);
-      const allMessages = [];
-      for (const account of accounts) {
-        const accountMessages = await fetchZohoAccountMessages(cfg, account.accountId);
-        allMessages.push(...accountMessages);
-      }
-      return allMessages
-        .sort(newestZohoFirst)
-        .filter(m => !m.isRead)
-        .slice(0, 8)
-        .map(m => ({
-          id: m.messageId || m.mailId || m.id,
-          provider,
-          accountId: m.accountId,
-          folderId: m.folderId || '',
-          subject: m.subject || '(no subject)',
-          from: zohoAddressText(m.fromAddress, m.from),
-          to: zohoAddressText(m.toAddress, m.to, m.recipientAddress, m.recipients),
-          snippet: m.summary || ''
-        }));
-    }
-    if (provider === 'gmail') {
-      const cfg = await getEmailConfig('gmail');
-      if (!cfg?.accessToken) return [];
-      const list = await gmailGet(cfg, '/messages', { maxResults: 8, q: 'is:unread -from:noreply -from:no-reply' });
-      const msgs = await Promise.all((list.messages || []).slice(0, 8).map(m => {
-        const params = new URLSearchParams();
-        params.append('format', 'metadata');
-        ['Subject', 'From', 'Date'].forEach(h => params.append('metadataHeaders', h));
-        return gmailGet(cfg, `/messages/${m.id}`, params);
-      }));
-      return msgs.map(m => {
-        const h = {};
-        (m.payload.headers || []).forEach(x => { h[x.name] = x.value; });
-        return { id: m.id, provider, subject: h.Subject || '(no subject)', from: h.From || '', snippet: m.snippet || '' };
-      });
-    }
-    if (provider === 'outlook') {
-      const cfg = await getEmailConfig('outlook');
-      if (!cfg?.accessToken) return [];
-      const data = await msGet(cfg, '/me/messages', { '$select': 'subject,from,bodyPreview,receivedDateTime,isRead', '$top': 12, '$orderby': 'receivedDateTime desc' });
-      return (data.value || []).filter(m => !m.isRead).slice(0, 8).map(m => ({
-        id: m.id, provider, subject: m.subject || '(no subject)', from: m.from?.emailAddress?.address || '', snippet: m.bodyPreview || ''
-      }));
-    }
-  } catch {}
-  return [];
-}
-
-async function fetchUpworkRSS() {
-  const queries = ['PLC SCADA South Africa', 'industrial automation South Africa', 'PCB electronics repair', 'IoT monitoring South Africa'];
-  const results = [];
-  const seen = new Set();
-  for (const q of queries) {
-    try {
-      const r = await axios.get(`https://www.upwork.com/ab/feed/jobs/rss?q=${encodeURIComponent(q)}&sort=recency`, { timeout: 8000, headers: { 'User-Agent': 'Mozilla/5.0' } });
-      const items = r.data.match(/<item>([\s\S]*?)<\/item>/g) || [];
-      items.slice(0, 4).forEach(item => {
-        const title = (item.match(/<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>/) || item.match(/<title>([\s\S]*?)<\/title>/))?.[1]?.trim() || '';
-        const link = (item.match(/<link>([\s\S]*?)<\/link>/))?.[1]?.trim() || '';
-        const desc = (item.match(/<description><!\[CDATA\[([\s\S]*?)\]\]><\/description>/) || item.match(/<description>([\s\S]*?)<\/description>/))?.[1]?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 400) || '';
-        if (title && link && !seen.has(link)) { seen.add(link); results.push({ title, url: link, description: desc, query: q }); }
-      });
-    } catch {}
-  }
-  return results;
-}
+// ---------------------------------------------------------------------------
+// Handler
+// ---------------------------------------------------------------------------
 
 app.http('agent-scan', {
   methods: ['POST'],
@@ -545,11 +454,17 @@ app.http('agent-scan', {
       const queueDoc = await loadQueue();
       const existing = new Set((queueDoc.queue || []).map(itemFingerprint).filter(Boolean));
 
-      const mail = [
-        ...(await getMailSamples('zoho_mail')),
-        ...(await getMailSamples('gmail')),
-        ...(await getMailSamples('outlook'))
-      ];
+      // ---- 1. Business context (used by admin + bookkeeper legs) ----------
+      const ctx = await loadBusinessContext();
+      const defaultProvider = await getDefaultProvider();
+
+      // ---- 2. Email leg: unread mail → drafted replies ---------------------
+      const mail = [];
+      for (const provider of ['zoho_mail', 'gmail', 'outlook']) {
+        const { samples, error } = await getMailSamplesWithError(provider);
+        mail.push(...samples);
+        if (error) errors.push('Mail ' + error);
+      }
 
       if (mail.length && client) {
         try {
@@ -588,39 +503,25 @@ Return [] if none qualify.` }]
         }
       }
 
-      if (client) {
-        try {
-          const jobs = await fetchUpworkRSS();
-          if (jobs.length) {
-            const r = await client.messages.create({
-              model: 'claude-haiku-4-5-20251001',
-              max_tokens: 1600,
-              messages: [{ role: 'user', content: `TECHSINNO does PCB repair, PLC/SCADA automation, and IoT monitoring in South Africa.
-${SCOUT_RULES}
-
-From these Upwork jobs pick the top 3 most relevant:
-${JSON.stringify(jobs)}
-
-Return ONLY JSON array:
-[{"title":"job title","url":"url","relevance":1-10,"reason":"max 8 words","painPoint":"problem client likely has","techsinnoSolution":"service fit","nextStep":"first action","bidProposal":"short practical bid from Frank"}]` }]
-            });
-            parseJsonArray(r.content[0]?.text).filter(j => (j.relevance || 0) >= 6).forEach(item => {
-              if (!existing.has(item.url)) {
-                newItems.push({
-                  id: uuidv4(), type: 'opportunity', source: 'upwork', priority: Math.ceil((10 - (item.relevance || 6)) / 2),
-                  flagType: 'opportunity', title: item.title, reason: item.reason, url: item.url, platform: 'Upwork',
-                  body: item.bidProposal, painPoint: item.painPoint || '', techsinnoSolution: item.techsinnoSolution || '',
-                  nextStep: item.nextStep || '', status: 'pending', createdAt: Date.now()
-                });
-                existing.add(item.url);
-              }
-            });
+      // ---- 3. Bookkeeper leg: overdue invoices → payment chasers ----------
+      try {
+        const books = await getBooksSnapshot(); // null if Books not connected
+        if (books) {
+          const bookItems = buildBookkeeperItems(books, ctx, defaultProvider);
+          for (const item of bookItems) {
+            const fp = itemFingerprint(item);
+            if (fp && !existing.has(fp)) {
+              newItems.push(item);
+              existing.add(fp);
+            }
           }
-        } catch (err) { errors.push('Upwork: ' + err.message); }
+        }
+      } catch (err) {
+        errors.push('Books: ' + (err.message || 'Zoho Books fetch failed'));
       }
 
+      // ---- 4. Admin legs: heuristics + Claude review -----------------------
       try {
-        const ctx = await loadBusinessContext();
         const adminItems = buildHeuristicAdminItems(ctx);
         for (const item of adminItems) {
           const fp = itemFingerprint(item);
@@ -648,14 +549,20 @@ Return ONLY JSON array:
         errors.push('Admin review: ' + err.message);
       }
 
+      // ---- 5. Persist queue + scan telemetry -------------------------------
+      const byType = {};
+      newItems.forEach(i => { byType[i.type] = (byType[i.type] || 0) + 1; });
+
       const now = Date.now();
       queueDoc.queue = [...(queueDoc.queue || []), ...newItems].slice(-300);
       queueDoc.lastScan = now;
+      queueDoc.lastErrors = errors;
+      queueDoc.lastScanSummary = { at: now, newItems: newItems.length, byType };
       queueDoc.updatedAt = new Date().toISOString();
       queueDoc.updatedBy = decoded.sub;
       await saveQueue(queueDoc);
 
-      return jsonResponse({ success: true, newItems: newItems.length, queue: queueDoc.queue, lastScan: now, errors });
+      return jsonResponse({ success: true, newItems: newItems.length, byType, queue: queueDoc.queue, lastScan: now, errors });
     } catch (err) {
       return jsonResponse({ error: err.message || 'Agent scan failed', errors }, 500);
     }

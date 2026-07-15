@@ -1,6 +1,105 @@
 const { app } = require('@azure/functions');
 const { getItem, queryItems } = require('../../shared/cosmos');
 const { authenticate, jsonResponse, unauthorized, badRequest } = require('../../shared/auth');
+const { AGENT_TOOLS, executeAgentTool } = require('../../shared/agent-tools');
+
+// ============================================================================
+// AI chat — now a real agent for managers/owner.
+//
+// Instead of stuffing a data snapshot into the prompt and answering read-only,
+// the manager chat runs a tool-use loop: Claude can look up live tasks, CRM,
+// jobs, quotes, reminders, unread email and Zoho Books figures, and can take
+// bounded actions (create/update tasks, reminders, clients, draft quotes) —
+// with every write logged to the activity feed and every outgoing email
+// parked in the approval queue instead of being sent.
+//
+// The staff chat is unchanged: simple, task-scoped, no tools.
+// ============================================================================
+
+const MAX_TOOL_ROUNDS = 6;      // max Claude<->tools round trips per message
+const TIME_BUDGET_MS = 90000;   // stay well inside the platform request limit
+
+function managerSystemPrompt() {
+  const today = new Date().toISOString().slice(0, 10);
+  return `You are the TECHSINNO AI agent — a working assistant built into the team dashboard for Frank Muland, owner of TECHSINNO (Pty) Ltd, a mechatronics and industrial electronics company in Kuilsriver, Western Cape, South Africa. Today is ${today}.
+
+Services: industrial PCB repair, factory automation (PLC/SCADA), IoT monitoring, diagnostics, preventive maintenance.
+Target clients: factories, farms, medical facilities and industrial operations, mainly in the Western Cape.
+Currency: ZAR (R).
+
+You act in five roles, using your tools:
+1. SECRETARY — triage unread email (read_recent_emails), draft replies and follow-ups (queue_email_for_approval), set reminders for promises and deadlines (create_reminder).
+2. ADMINISTRATOR — watch tasks and job cards (list_tasks, list_job_cards), chase overdue/blocked/stale work, create and update tasks with clear owners and deadlines (create_task, update_task).
+3. BOOKKEEPER — monitor money in Zoho Books (get_books_summary, list_overdue_invoices), flag overdue invoices, draft polite payment chasers, and draft quotes for RFQs (create_quote_draft).
+4. MARKETING AGENT — keep the CRM moving (list_clients, update_client), suggest problem-first outreach, draft outreach emails for approval.
+5. SOURCING LEAD — track leads and opportunities in the CRM and approval queue, and turn inbound RFQs into clients + quotes.
+
+Ground rules:
+- Use tools to check live data BEFORE stating facts about tasks, clients, money or email. Never guess IDs, amounts or names. When asked about status or "what should I do", start with get_business_snapshot.
+- You may take the bounded actions your tools allow. Emails are NEVER sent by you — queue_email_for_approval parks them for Frank's review in the AI Agent page. Say so when you queue one.
+- After taking actions, summarise exactly what you did.
+- Be a practical industrial problem-spotter, not a generic copywriter: identify the specific likely operational problem, state evidence, and clearly label assumptions.
+- Match problems to one TECHSINNO service and suggest a small first step: diagnostic call, site walk-through, failed-board assessment, control-panel review, downtime-risk check, or monitoring pilot.
+- Avoid generic phrases like "innovative solutions", "streamline your operations", "cutting-edge technology".
+- Do not invent past clients, completed jobs, case studies, or guaranteed savings.
+- Emails you draft: plaintext, 3–8 sentences, professional and specific, ending with Frank's signature ("Regards,\\nFrank\\nTECHSINNO (Pty) Ltd").
+- Be concise and business-focused. Use ZAR (R) for currency.`;
+}
+
+async function runManagerAgent(client, messages, decoded) {
+  const conv = messages.map(m => ({ role: m.role, content: m.content }));
+  const actions = [];
+  const started = Date.now();
+  let finalText = '';
+
+  for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
+    const outOfBudget = round === MAX_TOOL_ROUNDS || (Date.now() - started) > TIME_BUDGET_MS;
+
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 3000,
+      system: managerSystemPrompt(),
+      tools: AGENT_TOOLS,
+      tool_choice: outOfBudget ? { type: 'none' } : { type: 'auto' },
+      messages: conv
+    });
+
+    const textParts = response.content.filter(b => b.type === 'text').map(b => b.text);
+    const toolUses = response.content.filter(b => b.type === 'tool_use');
+
+    if (!toolUses.length || outOfBudget) {
+      finalText = textParts.join('\n').trim();
+      break;
+    }
+
+    // Record the assistant turn (may contain text + tool_use blocks)
+    conv.push({ role: 'assistant', content: response.content });
+
+    // Execute every requested tool and feed the results back
+    const results = [];
+    for (const tu of toolUses) {
+      const resultStr = await executeAgentTool(tu.name, tu.input, decoded);
+      try {
+        const parsed = JSON.parse(resultStr);
+        if (parsed && parsed.actionSummary) actions.push(parsed.actionSummary);
+      } catch {}
+      results.push({ type: 'tool_result', tool_use_id: tu.id, content: resultStr });
+    }
+    conv.push({ role: 'user', content: results });
+  }
+
+  if (!finalText) {
+    finalText = actions.length
+      ? 'Done — see the actions below.'
+      : 'I could not complete that within the step limit. Please try a more specific request.';
+  }
+
+  let text = finalText;
+  if (actions.length) {
+    text += '\n\n⚡ Actions taken:\n' + actions.map(a => '• ' + a).join('\n');
+  }
+  return { text, actions };
+}
 
 app.http('ai-chat', {
   methods: ['POST'],
@@ -23,103 +122,23 @@ app.http('ai-chat', {
         return badRequest('messages array is required');
       }
 
-      const managerContext = decoded.role === 'manager';
+      const Anthropic = require('@anthropic-ai/sdk');
+      const client = new Anthropic({ apiKey: config.apiKey });
 
-      const userTasks = await queryItems(
-        'tasks',
-        managerContext
-          ? 'SELECT * FROM c ORDER BY c.createdAt DESC OFFSET 0 LIMIT 50'
-          : 'SELECT * FROM c WHERE c.assignedTo = @uid ORDER BY c.createdAt DESC OFFSET 0 LIMIT 20',
-        managerContext ? [] : [{ name: '@uid', value: decoded.sub }]
-      );
-
-      let crmContext = '';
-      let campaignContext = '';
-      let jobContext = '';
-      let workloadContext = '';
-      if (managerContext) {
-        try {
-          const clients = await queryItems('clients', 'SELECT c.companyName, c.contactName, c.status, c.estimatedValue, c.followUpDate, c.source FROM c ORDER BY c.updatedAt DESC OFFSET 0 LIMIT 30', []);
-          const statusCounts = {};
-          let pipelineValue = 0;
-          const followUpsDue = [];
-          clients.forEach(c => {
-            statusCounts[c.status] = (statusCounts[c.status] || 0) + 1;
-            if (!['won', 'lost'].includes(c.status)) pipelineValue += (c.estimatedValue || 0);
-            if (c.followUpDate && new Date(c.followUpDate) <= new Date() && !['won', 'lost'].includes(c.status)) {
-              followUpsDue.push(`${c.companyName} (${c.contactName || 'no contact'})`);
-            }
-          });
-          crmContext = `\nCRM Pipeline: ${JSON.stringify(statusCounts)}. Pipeline value: R${Math.round(pipelineValue).toLocaleString()}.`;
-          if (followUpsDue.length) crmContext += `\nFollow-ups overdue: ${followUpsDue.join(', ')}.`;
-        } catch {}
-
-        try {
-          const campaigns = await queryItems('campaigns', "SELECT c.name, c.type, c.status, c.metrics FROM c WHERE c.status IN ('planning', 'active') OFFSET 0 LIMIT 10", []);
-          if (campaigns.length) {
-            campaignContext = `\nActive campaigns: ${campaigns.map(c => `${c.name} (${c.type}, ${c.status})`).join('; ')}.`;
-          }
-        } catch {}
-
-        try {
-          const jobCards = await queryItems('job-cards', 'SELECT * FROM c ORDER BY c.updatedAt DESC OFFSET 0 LIMIT 25', []);
-          const abnormal = [];
-          const open = jobCards.filter(j => !['done', 'completed', 'closed'].includes(String(j.status || '').toLowerCase()));
-          open.forEach(j => {
-            const days = j.updatedAt ? Math.floor((Date.now() - new Date(j.updatedAt).getTime()) / 86400000) : null;
-            if (!(j.assignedTo || []).length) abnormal.push(`${j.title || j.jobTitle || j.clientName || j.id}: no assignee`);
-            if (days !== null && days >= 7) abnormal.push(`${j.title || j.jobTitle || j.clientName || j.id}: ${days} days no update`);
-            if ((j.tasks || []).some(t => t.status === 'blocked')) abnormal.push(`${j.title || j.jobTitle || j.clientName || j.id}: blocked task`);
-          });
-          jobContext = `\nJob cards: ${open.length} open. Abnormal job signals: ${abnormal.slice(0, 10).join('; ') || 'none detected'}.`;
-        } catch {}
-
-        try {
-          const users = await queryItems('users', 'SELECT c.id, c.displayName, c.role, c.active FROM c WHERE c.active = true OFFSET 0 LIMIT 30', []);
-          const counts = {};
-          userTasks.filter(t => t.status !== 'done').forEach(t => { counts[t.assignedTo] = (counts[t.assignedTo] || 0) + 1; });
-          workloadContext = `\nTeam workload: ${users.map(u => `${u.displayName}: ${counts[u.id] || 0} open tasks`).join('; ')}.`;
-        } catch {}
+      // ----- Manager / owner: full agent with tools -----------------------
+      if (decoded.role === 'manager') {
+        const { text, actions } = await runManagerAgent(client, messages, decoded);
+        return jsonResponse({ success: true, text, actions });
       }
 
-      let systemPrompt;
-      if (managerContext) {
-        systemPrompt = `You are an AI business operations assistant built into the TECHSINNO team dashboard for Frank Muland, owner of TECHSINNO (Pty) Ltd — a mechatronics and industrial electronics company in Kuilsriver, Western Cape, South Africa.
+      // ----- Staff: unchanged simple, task-scoped assistant ----------------
+      const userTasks = await queryItems(
+        'tasks',
+        'SELECT * FROM c WHERE c.assignedTo = @uid ORDER BY c.createdAt DESC OFFSET 0 LIMIT 20',
+        [{ name: '@uid', value: decoded.sub }]
+      );
 
-Services: industrial PCB repair, factory automation (PLC/SCADA), IoT monitoring systems.
-Target clients: factories, farms, medical facilities in the Western Cape.
-Business email: frank@techsinno.com
-
-When helping Frank with outreach, leads, quotes, follow-ups, or business development, behave like a practical industrial problem-spotter, not a generic email writer:
-- Identify the specific likely operational problem for the company/sector.
-- State evidence and clearly label assumptions.
-- Match the problem to one TECHSINNO service: PCB repair, PLC/SCADA automation, IoT monitoring, diagnostics, preventive maintenance.
-- Suggest a small first step: diagnostic call, site walk-through, failed-board assessment, control-panel review, downtime-risk check, or monitoring pilot.
-- Only then draft the email/message.
-- Avoid generic phrases like "innovative solutions", "streamline your operations", or "cutting-edge technology".
-- Do not invent past clients, completed jobs, case studies, or guaranteed savings.
-
-Act like a real approval-based admin agent:
-- Anticipate the next movement Frank should take.
-- Check job/task evolution and call out abnormalities: overdue, blocked, stale, unassigned, unclear next step, or workload imbalance.
-- Suggest better options before drafting generic messages.
-- Propose tasks to assign, owners, deadlines, and reasons.
-- For leads/work: identify likely sectors, companies, and work opportunities to pursue from available dashboard/email/platform data.
-- You may recommend actions, but do not claim an action was done unless the system confirms it.
-
-You help with OPERATIONAL tasks only — task management, drafting professional communications, scheduling, and business operations. You do NOT do general research.
-
-Current tasks in the system:
-${JSON.stringify(userTasks.slice(0, 20), null, 2)}
-${crmContext}${campaignContext}${jobContext}${workloadContext}
-
-When asked to draft outreach, format with: Problem spotted, Evidence/assumption, TECHSINNO fit, First step, Subject, and Body.
-When asked for a social post, provide the post text ready to copy.
-When asked about follow-ups, reference specific clients by name.
-When asked what to do next, answer with: Top risk, Best next move, Task to assign, Owner suggestion, Deadline suggestion, and Why.
-Use ZAR (R) for currency. Be concise, practical, and business-focused. Help manage tasks, suggest priorities, and draft communications specific to the SA industrial/manufacturing market.`;
-      } else {
-        systemPrompt = `You are an AI assistant for a team member at TECHSINNO (Pty) Ltd — a mechatronics and industrial electronics company. You help with OPERATIONAL tasks only:
+      const systemPrompt = `You are an AI assistant for a team member at TECHSINNO (Pty) Ltd — a mechatronics and industrial electronics company. You help with OPERATIONAL tasks only:
 - Understanding task requirements
 - Drafting professional messages to customers
 - Suggesting how to approach assigned work
@@ -130,10 +149,6 @@ You do NOT discuss financial data, business strategy, or company internals. Stay
 User: ${decoded.name}
 Their current tasks:
 ${JSON.stringify(userTasks.slice(0, 10), null, 2)}`;
-      }
-
-      const Anthropic = require('@anthropic-ai/sdk');
-      const client = new Anthropic({ apiKey: config.apiKey });
 
       const response = await client.messages.create({
         model: 'claude-sonnet-4-6',
@@ -143,7 +158,6 @@ ${JSON.stringify(userTasks.slice(0, 10), null, 2)}`;
       });
 
       const text = response.content.filter(b => b.type === 'text').map(b => b.text).join('');
-
       return jsonResponse({ success: true, text });
     } catch (err) {
       return jsonResponse({ error: err.message || 'AI chat failed' }, 500);

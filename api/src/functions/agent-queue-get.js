@@ -19,10 +19,12 @@ app.http('agent-queue-get', {
         success: true,
         queue: item.queue || [],
         lastScan: item.lastScan || null,
+        lastErrors: item.lastErrors || [],
+        lastScanSummary: item.lastScanSummary || null,
         updatedAt: item.updatedAt || null
       });
     } catch (err) {
-      if (err.code === 404) return jsonResponse({ success: true, queue: [], lastScan: null });
+      if (err.code === 404) return jsonResponse({ success: true, queue: [], lastScan: null, lastErrors: [], lastScanSummary: null });
       return jsonResponse({ error: 'Failed to load agent queue' }, 500);
     }
   }
