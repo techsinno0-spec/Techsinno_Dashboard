@@ -18,6 +18,7 @@ const { AGENT_TOOLS, executeAgentTool } = require('../../shared/agent-tools');
 
 const MAX_TOOL_ROUNDS = 6;      // max Claude<->tools round trips per message
 const TIME_BUDGET_MS = 90000;   // stay well inside the platform request limit
+const CHAT_MODEL = process.env.CLAUDE_CHAT_MODEL || 'claude-sonnet-5';
 
 function managerSystemPrompt() {
   const today = new Date().toISOString().slice(0, 10);
@@ -56,7 +57,7 @@ async function runManagerAgent(client, messages, decoded) {
     const outOfBudget = round === MAX_TOOL_ROUNDS || (Date.now() - started) > TIME_BUDGET_MS;
 
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: CHAT_MODEL,
       max_tokens: 3000,
       system: managerSystemPrompt(),
       tools: AGENT_TOOLS,
@@ -151,7 +152,7 @@ Their current tasks:
 ${JSON.stringify(userTasks.slice(0, 10), null, 2)}`;
 
       const response = await client.messages.create({
-        model: 'claude-sonnet-4-6',
+        model: CHAT_MODEL,
         max_tokens: 1024,
         system: systemPrompt,
         messages

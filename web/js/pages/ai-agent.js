@@ -297,6 +297,8 @@ function webAgentRefreshBriefingBox(loadingText) {
 async function webAgentStartDay() {
   const buttons = [document.getElementById('webAgentStartDayBtn'), document.getElementById('webAgentStartDayPanelBtn')].filter(Boolean);
   buttons.forEach(btn => { btn.disabled = true; btn.innerHTML = '<div class="spin" style="width:12px;height:12px;border-width:2px"></div> Starting'; });
+  webAgentLastErrors = [];
+  webAgentRenderErrors();
   webAgentRefreshBriefingBox('Running operations scan...');
   ntf('Starting daily command scan...');
 
@@ -763,6 +765,8 @@ function webAgentCopy(id) {
 async function webAgentRunScan() {
   const btn = document.getElementById('webAgentScanBtn');
   if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spin" style="width:12px;height:12px;border-width:2px"></div> Scanning...'; }
+  webAgentLastErrors = [];
+  webAgentRenderErrors();
   ntf('Cloud AI scan started...');
   try {
     const data = await apiPost('/agent/scan', {});

@@ -44,7 +44,12 @@ async function apiCall(method, path, body = null) {
   }
   const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(`${API_BASE}/api${path}`, opts);
+  let res;
+  try {
+    res = await fetch(`${API_BASE}/api${path}`, opts);
+  } catch (err) {
+    return { error: err.message || 'Network request failed' };
+  }
   if (res.status === 401) {
     localStorage.removeItem('ts_token');
     localStorage.removeItem('ts_user');
@@ -55,7 +60,8 @@ async function apiCall(method, path, body = null) {
   try {
     return JSON.parse(text);
   } catch {
-    return { error: `Server error (${res.status})` };
+    const detail = (text || '').replace(/\s+/g, ' ').trim().slice(0, 280);
+    return { error: detail ? `Server error (${res.status}): ${detail}` : `Server error (${res.status})` };
   }
 }
 
