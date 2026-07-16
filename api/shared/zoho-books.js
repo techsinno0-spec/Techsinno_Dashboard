@@ -37,6 +37,23 @@ function zohoErrorMessage(err, label) {
   return `${label}: ${detail}${status}`;
 }
 
+function isOrgMismatchError(err) {
+  const data = err?.response?.data || {};
+  const detail = [
+    data.message,
+    data.error_description,
+    data.error,
+    typeof data === 'string' ? data : '',
+    err.message
+  ].filter(Boolean).join(' ').toLowerCase();
+  return err?.response?.status === 400 && (
+    detail.includes('not associated with the companyid') ||
+    detail.includes('not associated with the companyname') ||
+    detail.includes('not associated with this organization') ||
+    detail.includes('organization id')
+  );
+}
+
 async function ensureBooksToken(config) {
   if (config.accessToken && config.tokenExpiry && Date.now() < config.tokenExpiry - 60000) {
     return config.accessToken;
@@ -61,6 +78,10 @@ async function ensureBooksToken(config) {
 
 async function ensureBooksOrgId(config, headers) {
   if (config.orgId) return config.orgId;
+  return refreshBooksOrgId(config, headers);
+}
+
+async function refreshBooksOrgId(config, headers) {
   const region = getBooksRegion(config.region || 'com');
   const orgs = await axios.get(`${region.api}/organizations`, { headers });
   const org = (orgs.data.organizations || [])[0];
@@ -76,13 +97,24 @@ async function booksGet(config, path, params = {}) {
   const headers = { Authorization: `Zoho-oauthtoken ${token}` };
   const apiBase = getBooksRegion(config.region || 'com').api;
   const orgId = await ensureBooksOrgId(config, headers);
+  const request = (organizationId) => axios.get(`${apiBase}${path}`, {
+    headers,
+    params: { organization_id: organizationId, ...params }
+  });
+
   try {
-    const res = await axios.get(`${apiBase}${path}`, {
-      headers,
-      params: { organization_id: orgId, ...params }
-    });
+    const res = await request(orgId);
     return res.data;
   } catch (err) {
+    if (isOrgMismatchError(err)) {
+      const freshOrgId = await refreshBooksOrgId(config, headers);
+      try {
+        const retry = await request(freshOrgId);
+        return retry.data;
+      } catch (retryErr) {
+        throw new Error(zohoErrorMessage(retryErr, `Zoho Books ${path}`));
+      }
+    }
     throw new Error(zohoErrorMessage(err, `Zoho Books ${path}`));
   }
 }

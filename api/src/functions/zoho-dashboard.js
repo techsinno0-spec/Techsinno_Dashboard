@@ -22,6 +22,23 @@ function zohoErrorMessage(err) {
   return `Zoho Books: ${detail}${status}`;
 }
 
+function isOrgMismatchError(err) {
+  const data = err?.response?.data || {};
+  const detail = [
+    data.message,
+    data.error_description,
+    data.error,
+    typeof data === 'string' ? data : '',
+    err.message
+  ].filter(Boolean).join(' ').toLowerCase();
+  return err?.response?.status === 400 && (
+    detail.includes('not associated with the companyid') ||
+    detail.includes('not associated with the companyname') ||
+    detail.includes('not associated with this organization') ||
+    detail.includes('organization id')
+  );
+}
+
 async function ensureZohoToken(config) {
   if (config.accessToken && config.tokenExpiry && Date.now() < config.tokenExpiry - 60000) {
     return config.accessToken;
@@ -45,6 +62,10 @@ async function ensureZohoToken(config) {
 
 async function ensureOrgId(config, headers) {
   if (config.orgId) return config.orgId;
+  return refreshOrgId(config, headers);
+}
+
+async function refreshOrgId(config, headers) {
   const region = getZohoBooksRegion(config.region || 'com');
   const orgs = await axios.get(`${region.api}/organizations`, { headers });
   const org = (orgs.data.organizations || [])[0];
@@ -53,6 +74,24 @@ async function ensureOrgId(config, headers) {
   config.orgName = org.name;
   await replaceItem('config', config.id, config);
   return config.orgId;
+}
+
+async function zohoBooksGet(apiBase, headers, config, path, params = {}) {
+  const orgId = await ensureOrgId(config, headers);
+  const request = (organizationId) => axios.get(`${apiBase}${path}`, {
+    headers,
+    params: { organization_id: organizationId, ...params }
+  });
+
+  try {
+    return await request(orgId);
+  } catch (err) {
+    if (isOrgMismatchError(err)) {
+      const freshOrgId = await refreshOrgId(config, headers);
+      return request(freshOrgId);
+    }
+    throw err;
+  }
 }
 
 app.http('zoho-dashboard', {
@@ -74,13 +113,11 @@ app.http('zoho-dashboard', {
       const token = await ensureZohoToken(config);
       const headers = { Authorization: `Zoho-oauthtoken ${token}` };
       const apiBase = getZohoBooksRegion(config.region || 'com').api;
-      const orgId = await ensureOrgId(config, headers);
-      const params = { organization_id: orgId };
 
       const [invoices, expenses, contacts] = await Promise.all([
-        axios.get(`${apiBase}/invoices`, { headers, params: { ...params, per_page: 200 } }),
-        axios.get(`${apiBase}/expenses`, { headers, params: { ...params, per_page: 200 } }),
-        axios.get(`${apiBase}/contacts`, { headers, params: { ...params, per_page: 200 } })
+        zohoBooksGet(apiBase, headers, config, '/invoices', { per_page: 200 }),
+        zohoBooksGet(apiBase, headers, config, '/expenses', { per_page: 200 }),
+        zohoBooksGet(apiBase, headers, config, '/contacts', { per_page: 200 })
       ]);
 
       const invList = invoices.data.invoices || [];
