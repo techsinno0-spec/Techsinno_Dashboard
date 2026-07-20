@@ -16,9 +16,11 @@ const { AGENT_TOOLS, executeAgentTool } = require('../../shared/agent-tools');
 // The staff chat is unchanged: simple, task-scoped, no tools.
 // ============================================================================
 
-const MAX_TOOL_ROUNDS = 6;      // max Claude<->tools round trips per message
-const TIME_BUDGET_MS = 90000;   // stay well inside the platform request limit
-const CHAT_MODEL = process.env.CLAUDE_CHAT_MODEL || 'claude-sonnet-5';
+const MAX_TOOL_ROUNDS = 4;      // max Claude<->tools round trips per message
+const TIME_BUDGET_MS = 25000;   // leave time for Azure/SWA to return the response
+// Keep the default pinned to a real Anthropic API model ID. A friendly product
+// name such as "claude-sonnet-5" is not necessarily a valid Messages API ID.
+const CHAT_MODEL = process.env.CLAUDE_CHAT_MODEL || 'claude-sonnet-4-20250514';
 
 function managerSystemPrompt() {
   const today = new Date().toISOString().slice(0, 10);
