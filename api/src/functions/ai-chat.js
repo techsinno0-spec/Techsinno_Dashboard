@@ -18,9 +18,9 @@ const { AGENT_TOOLS, executeAgentTool } = require('../../shared/agent-tools');
 
 const MAX_TOOL_ROUNDS = 4;      // max Claude<->tools round trips per message
 const TIME_BUDGET_MS = 25000;   // leave time for Azure/SWA to return the response
-// Keep the default pinned to a real Anthropic API model ID. A friendly product
-// name such as "claude-sonnet-5" is not necessarily a valid Messages API ID.
-const CHAT_MODEL = process.env.CLAUDE_CHAT_MODEL || 'claude-sonnet-4-20250514';
+// Sonnet 4 was retired on 2026-06-15. Use its supported replacement unless an
+// explicit model is configured in the Azure environment.
+const CHAT_MODEL = process.env.CLAUDE_CHAT_MODEL || 'claude-sonnet-4-6';
 
 function managerSystemPrompt() {
   const today = new Date().toISOString().slice(0, 10);
@@ -126,7 +126,14 @@ app.http('ai-chat', {
       }
 
       const Anthropic = require('@anthropic-ai/sdk');
-      const client = new Anthropic({ apiKey: config.apiKey });
+      // Azure Static Web Apps has a shorter request window than the SDK's
+      // defaults. Fail once, promptly, so our catch block can return the real
+      // provider error instead of Azure replacing it with "Backend call failure".
+      const client = new Anthropic({
+        apiKey: config.apiKey,
+        maxRetries: 0,
+        timeout: TIME_BUDGET_MS
+      });
 
       // ----- Manager / owner: full agent with tools -----------------------
       if (decoded.role === 'manager') {
